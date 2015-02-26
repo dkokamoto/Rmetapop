@@ -66,15 +66,7 @@ spat_temp_ts <- function(n_iter, n_loc, site_sd, spat_sd, phi, cor_mat = NULL, l
 #' @param spat_sd scale of spatial correlation for the Cauchy case. 
 #' @param sumto1 if TRUE makes the columns sum to 1.
 #' @description Generate a spatially correlated matrix where correlations decrease in space via a Gaussian process (with spat_sd) OR a Cauchy process (with spat_scale)
-#' @examples 
-#' par(mfrow = c(3,2),mai= c(0.75,0.75,0.75,0.75),mgp = c(1.5,0.5,0.1))
-#' 
-#'matplot(spat_cor_mat(n_loc=10, spat_scale = 1),type= "l",ylab= "correlation",xlab= "site",main= "Cauchy, scale= 1")
-#'matplot(spat_cor_mat(n_loc=10, spat_sd = 1),type= "l",ylab= "correlation",xlab= "site",main= "Gaussian, sd= 1")
-#' matplot(spat_cor_mat(n_loc=10, spat_scale = 2),type= "l",ylab= "correlation",xlab= "site",main= "Cauchy, scale= 2")
-#' matplot(spat_cor_mat(n_loc=10, spat_sd = 2),type= "l",ylab= "correlation",xlab= "site",main= "Gaussian, sd= 2")
-#' matplot(spat_cor_mat(n_loc=10, spat_scale = 10),type= "l",ylab= "correlation",xlab= "site",main= "Cauchy, scale= 10")
-#' matplot(spat_cor_mat(n_loc=10, spat_sd = 10),type= "l",ylab= "correlation",xlab= "site",main= "Gaussian, sd= 10")
+#' @example /inst/examples/stray_mat_example.R
 spat_cor_mat <- function(n_loc, spat_sd = 1, spat_scale = NULL, sumto1 = FALSE) {
     if (is.null(spat_scale)) {
         dn1 <- dnorm(c(1:(2 * n_loc - 1)), mean = n_loc, sd = spat_sd)
@@ -101,6 +93,7 @@ spat_cor_mat <- function(n_loc, spat_sd = 1, spat_scale = NULL, sumto1 = FALSE) 
 #' @param n_iter number of observations.
 #' @param scale higher values provide lower variability in random samples.
 #' @description Generate a series of random stray matrices by sampling from the Dirichlet distribution with a mean stray probability matrix and scale parameter
+#' @example  /inst/examples/stochastic_stray_matrix_example.R
 ran_stray_prob <- function(stray_mat,n_iter,scale){
   Crand <- array(NA, dim = c(dim(stray_mat), n_iter))
   for (i in 1:n_iter) {
