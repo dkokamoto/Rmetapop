@@ -1,0 +1,16 @@
+{
+    "contents" : "#' Apply a Kalman filter to a time series \nkalman_assess <- function(TS, sd1, sd2, fit = FALSE, full.ts = FALSE, log = TRUE) {\n    \n    if (fit == TRUE) {\n        TSBuild <- function(par) {\n            dlmModPoly(1, dV = par[1], dW = par[2])\n        }\n        TSMLE <- dlmMLE(TS, rep(0, 2), TSBuild)\n        TSMod <- TSBuild(TSMLE$par)\n    } else {\n        TSBuild <- function(sd1, sd2) {\n            dlmModPoly(1, dV = sd1, dW = sd2)\n        }\n        TSMod <- TSBuild(sd1 = sd1, sd2 = sd2)\n    }\n    TSFilt <- dlmFilter(TS, TSMod)\n    if (full.ts == TRUE) {\n        return(exp(TSFilt$m[-1] - 0.5 * sd1^2))\n    } else {\n        return(exp(TSFilt$m[length(TSFilt$m)] - 0.5 * sd1^2))\n    }\n} \n",
+    "created" : 1424898896565.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3490519771",
+    "id" : "8D7A9A15",
+    "lastKnownWriteTime" : 1424765685,
+    "path" : "~/Copy/Post-Doc/Rmetapop/Rmetapop/R/assessment.R",
+    "project_path" : "Rmetapop/R/assessment.R",
+    "properties" : {
+    },
+    "source_on_save" : false,
+    "type" : "r_source"
+}
