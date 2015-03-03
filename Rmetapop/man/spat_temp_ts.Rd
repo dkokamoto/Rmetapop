@@ -29,7 +29,7 @@ Step 2: Generate a variance-covariance matrix using site_sd and cor_mat
 
 Step 3: Create a time series of multivariate normal vectors (each vector is of length n_loc) with n_iter vector observations in the time series.
 
-Step 4: Run each of the n_log time series through an AR(1) filter with first order correlation phi
+Step 4: Run each of the n_loc time series through an AR(1) filter with first order correlation phi
 
 Step 5: Generate observed correlation matrix and vector of first order correlations the time series
 }

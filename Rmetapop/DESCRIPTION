@@ -16,5 +16,6 @@ Depends:
   gtools,
   mvtnorm,
   plyr,
+  reshape2,
   slam,
   scales

@@ -13,7 +13,7 @@
 #' 
 #' Step 3: Create a time series of multivariate normal vectors (each vector is of length n_loc) with n_iter vector observations in the time series. 
 #' 
-#' Step 4: Run each of the n_log time series through an AR(1) filter with first order correlation phi
+#' Step 4: Run each of the n_loc time series through an AR(1) filter with first order correlation phi
 #' 
 #' Step 5: Generate observed correlation matrix and vector of first order correlations the time series
 #' @example /inst/examples/spat_temp_ts_examples.R
@@ -83,7 +83,7 @@ spat_cor_mat <- function(n_loc, spat_sd = 1, spat_scale = NULL, sumto1 = FALSE) 
     }
     
     if (sumto1 == TRUE) {
-        cor_mat <- apply(cor_mat, 2, "/", colSums(cor_mat))
+        cor_mat <- apply(cor_mat,2,function(x) x/sum(x))
     }
     return(cor_mat)
 }

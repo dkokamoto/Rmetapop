@@ -25,7 +25,6 @@ round(spat_cor_mat(n_loc=10,spat_sd=4,sumto1=FALSE),3)
 #a stray th 10 sites and sd of 4
 round(spat_cor_mat(n_loc=10,spat_sd=4,sumto1=TRUE),3)
 
-
 # illustrate different parameter values
 library(RColorBrewer)
 
