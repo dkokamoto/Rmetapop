@@ -1,4 +1,3 @@
-
 #' Discrete survival, straying, and recruitment projection.
 #' @param stray_mat a square L x L stray matrix. 
 #' @param mort_mat an S x L mortality matrix OR a vector of length L OR a single value.
