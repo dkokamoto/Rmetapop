@@ -10,13 +10,13 @@ stage_mat <- 3  # stage # that indicates maturity
 ### columns)
 mort <- matrix(0.334, ncol = n_loc, nrow = length((stage_mat - 1):(n_stages)))
 
-mort_mat <- array(0, dim = c(n_stages - 1, n_stages - 1, n_loc))
+surv_array <- array(0, dim = c(n_stages - 1, n_stages - 1, n_loc))
 
-### create identifier of matrix entries that correspond to mortality for quick
+### create identifier of survival array entries that correspond to each survival rate for quick
 ### replacement in the array
-mort_mat_id <- array(matrix(1:n_stages^2, ncol = n_stages) %in% c(diag(matrix(1:n_stages^2, 
-                                                                              ncol = n_stages)[-c(1), ]), n_stages^2), dim = c(n_stages, n_stages, n_loc))[-1, 
-                                                                                                                                                           -1, ]
+surv_array_id <- array(matrix(1:n_stages^2, ncol = n_stages) %in% 
+  c(diag(matrix(1:n_stages^2,ncol = n_stages)[-c(1), ]), n_stages^2), 
+  dim = c(n_stages, n_stages, n_loc))[-1,-1, ]
 
 ### fecundity at age 3-10
 fec_at_age <- fecundity_age(stage_mat:(n_stages))
@@ -88,11 +88,11 @@ obs_sd <- 0.3
 ### project the population with stochastic recruitment ###
 system.time(for (i in 3:n_iter) {
   
-  mort_mat[mort_mat_id] <- exp(-mort)
+  surv_array[surv_array_id] <- exp(-mort)
   
-  X[, , i] <- SSR_linear(alpha=alpha,beta=beta, fec_at_age = fec_at_age, 
+  X[, , i] <- ssr_linear(alpha=alpha,beta=beta, fec_at_age = fec_at_age, 
                          n_loc = n_loc, n_stages = n_stages,
-                         stage_mat = stage_mat,mort_mat = mort_mat,
+                         stage_mat = stage_mat,surv_array = surv_array,
                          eggs = X[1, , i - 2], X0 = X[(stage_mat - 1):n_stages, , i - 1],
                          stray_mat = Crand[,, i - 1], errors = errors$ts[i - 1, ])
 

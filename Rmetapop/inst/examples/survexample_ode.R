@@ -88,7 +88,7 @@ obs_sd <- 0.3
 ### project the population with stochastic recruitment ###
 system.time(for (i in 3:n_iter) {
   
-  X[, , i] <- SSR_linear_ode(alpha=alpha,beta=beta, fec_at_age = fec_at_age, 
+  X[, , i] <- ssr_linear_ode(alpha=alpha,beta=beta, fec_at_age = fec_at_age, 
                               n_loc = n_loc, n_stages = n_stages, stage_mat = stage_mat, 
                               eggs = X[1, , i - 2], X = X[(stage_mat - 1):n_stages, , i - 1], 
                              Z = mort, stray = Crand[, , i - 1], 

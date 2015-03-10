@@ -1,6 +1,6 @@
 #' Discrete survival, straying, and recruitment projection.
 #' @param stray_mat a square L x L stray matrix. 
-#' @param mort_mat an S x L mortality matrix OR a vector of length L OR a single value.
+#' @param surv_array an array of S-1 x S-1 survival matrices of length L (i.e. an array of off diagonal matrices) OR a single S-1 x S-1 survival matrix if constant in space OR a single survival value if constant in space and across ages.
 #' @param fec_at_age a vector or matrix of fecundity at age including only mature stages.
 #' @param eggs a vector of eggs associated with the next years cohort (fed into the stock recruit relationship).
 #' @param E0,h,R0  Beverton-Holt parameters (E0= egg production at B0, h= steepness, R0 = recruitment at B0).
@@ -14,7 +14,7 @@
 #' @description Generates a single projection including survival followed by straying and reproduction using a matrix algebra in discrete time.
 #' @seealso surv_stray_recr_ode
 
-SSR_linear <- function(stray_mat, mort_mat, fec_at_age, 
+ssr_linear <- function(stray_mat, surv_array, fec_at_age, 
                             eggs, E0, h , R0, 
                             alpha=NULL,beta=NULL,
                             stage_maturity, errors = 0, X0, n_stages, n_loc) {
@@ -22,13 +22,13 @@ SSR_linear <- function(stray_mat, mort_mat, fec_at_age,
     ### create empty array
     X1 <- array(as.numeric(NA), dim = c(n_stages, n_loc))
     
-    if (length(dim(mort_mat)) > 2) {
+    if (length(dim(surv_mat)) > 2) {
         ### fill in mortality at age
         for (j in 1:5) {
-            X1[(stage_maturity - 1):n_stages, j] <- mort_mat[, , j] %*% X0[, j]
+            X1[(stage_maturity - 1):n_stages, j] <- surv_array[, , j] %*% X0[, j]
         }
     } else {
-        X1[(stage_maturity - 1):n_stages, ] <- mort_mat %*% X0
+        X1[(stage_maturity - 1):n_stages, ] <- surv_array %*% X0
     }
     X1[(stage_maturity - 1):n_stages, ] <- X1[2:n_stages, ] %*% t(stray_mat)
     X1[1, ] <- fec_at_age %*% X1[stage_maturity:n_stages, ]
@@ -59,7 +59,7 @@ SSR_linear <- function(stray_mat, mort_mat, fec_at_age,
 #' @param method the method of numerical integration (defaults to "lsoda").
 #' @example /inst/examples/survexample_ode.R
 #'@description Generates a single projection including simultaneous survival, straying and harvest using a system of ordinary differential equations followed by discrete reproduction 
-SSR_linear_ode <- function(stray, Z, fec_at_age, eggs, 
+ssr_linear_ode <- function(stray, Z, fec_at_age, eggs, 
                                 E0, h, R0, 
                                 alpha= NULL,beta= NULL,
                                 stage_maturity, errors = 0, 
