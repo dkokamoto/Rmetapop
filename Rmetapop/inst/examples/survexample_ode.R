@@ -1,7 +1,7 @@
 
 ### set up parameters for the simulation test survival & migration function with two
 ### locations ### general parameters ###
-n_loc <- 5  ### number of locations
+n_loc <- 3  ### number of locations
 n_iter <- 100  ### number of years
 n_stages <- 10  ### number of stages including eggs and recruits
 stage_mat <- 3  ### stage # that indicates maturity 
@@ -68,37 +68,78 @@ d2 <- c(paste("Location", 1:n_loc, sep = "_"))
 d3 <- 1:n_iter
 
 ## set up the abundance array
-X <- array(as.numeric(NA), dim = c(10, n_loc, n_iter), dimnames = list(d1, d2, d3))
+X <- array(as.numeric(NA), dim = c(n_stages, n_loc, n_iter), dimnames = list(d1, d2, d3))
 X[, , 1:2] <- matrix(rep(1e+08, each = n_loc), ncol = n_loc, byrow = T)
 
 ## set up the adult biomass array
-B <- array(NA, dim = c(n_loc, n_iter, 3), dimnames = list(d2, d3, c("Actual", "Observed", 
-                                                                     "Forecast")))
+B <- array(NA, dim = c(n_loc, n_iter+1, 4), dimnames = list(d2, 1:(n_iter+1), c("Actual", "Observed","Estimate","Forecast")))
 B[, 1, ] <- tons_at_age %*% X[3:10, , 1]/1000
 B[, 2, ] <- tons_at_age %*% X[3:10, , 2]/1000
 
-## set up the Forecast adult biomass array
-BF <- array(NA, dim = c(n_loc, n_iter, 3), dimnames = list(d2, d3, c("True", "Observed", 
-                                                                      "Estimate")))
-BF[, 1, ] <- tons_at_age %*% X[3:10, , 1]/1000
-BF[, 2, ] <- tons_at_age %*% X[3:10, , 2]/1000
+## set up the estimated spawner biomass array
+BF <- array(NA, dim = c(n_loc, n_iter, n_iter), dimnames = list(d2, d3, d3))
 
+## set up the estimated forecast spawner biomass array
+BF2 <- array(NA, dim = c(n_loc, n_iter+1, n_iter), dimnames = list(d2, 1:(n_iter+1),d3))
+
+## set up the forecast abundance at age array
+AF <- array(NA, dim = c(n_stages,n_loc,  n_iter+1, n_iter), dimnames = list(d1,d2,1:(n_iter+1),d3))
+
+## set up the size frequnecy array
+S_freq <- array(NA, dim = c(n_stages-2,n_loc, n_iter), dimnames = list(d1[-c(1,2)],d2,d3))
+
+### log-scale observer errorr
 obs_sd <- 0.3
 
+
 ### project the population with stochastic recruitment ###
-system.time(for (i in 3:n_iter) {
-  
-  X[, , i] <- ssr_linear_ode(alpha=alpha,beta=beta, fec_at_age = fec_at_age, 
-                              n_loc = n_loc, n_stages = n_stages, stage_mat = stage_mat, 
-                              eggs = X[1, , i - 2], X = X[(stage_mat - 1):n_stages, , i - 1], 
-                             Z = mort, stray = Crand[, , i - 1], 
+system.time(
+  for (i in 3:n_iter) {
+    X[, , i] <- ssr_linear_ode(alpha=alpha,beta=beta, fec_at_age = fec_at_age, 
+                             n_loc = n_loc, n_stages = n_stages, stage_mat = stage_mat, 
+                             eggs = X[1, , i - 2], 
+                             X0 = X[(stage_mat - 1):n_stages, , i - 1], 
+                             Z = mort, stray = Crand[, , i - 1],
+                             inst_h= 0, 
                              errors = errors$ts[i - 1, ])$X
   
-  B[, i, 1] <- tons_at_age %*% X[3:10, , i]/1000
-  B[, i, 2] <- B[, i, 1] * exp(rnorm(n_loc, 0, obs_sd) - 0.5 * obs_sd^2)
-  B[, i, 3] <- aaply(log(B[, 2:i, 2]), 1, sd1 = obs_sd, sd2 = 0.2, fit = FALSE, 
-                     kalman_assess)
-})
+    ### age frequency ###
+    S_freq[,,i]  <- t(t(X[-c(1,2),,i])/colSums(X[-c(1,2),,i]))
+    
+    ### actual biomass
+    B[, i, 1] <- tons_at_age %*% X[3:n_stages, , i]/1000
+    
+    ### observed biomass with observer error
+    B[, i, 2] <- B[, i, 1] * exp(rnorm(n_loc, 0, obs_sd) - 0.5 * obs_sd^2)
+    
+    ### Kalman filter with known observer and process error
+    BF[, 1:i, i] <- aaply(log(B[, 1:i, 2]), 1,
+      obs_sd = obs_sd,sys_sd=0.5,
+      fit = FALSE, full.ts= TRUE,
+      kalman_assess)
+  
+    ### apply the known size frequency information to generate observed abundance by adult age class###
+    for (l in 1:n_loc) {
+      AF[3:n_stages, l,1:i, i] <- apply(t(t(S_freq[,l,1:i])*BF[l, 1:i, i]),2,function(x) x/tons_at_age*1000)
+    }  
+    
+    AF[1, ,i-2, i] <- fec_at_age %*% AF[stage_mat:n_stages,,i-2,i]
+    
+    ### calculate expected recruitment assuming the mean BH relationship is known 
+    AF[2, ,i, i] <- mapply(BH, E =  AF[1, ,i-2, i],
+                           alpha= alpha,beta=beta)
+    
+    ### calculate expected survival assuming adult mortality is known 
+    surv <- AF[2:n_stages, ,i, i]*exp(-mort)
+    
+    AF[3:(n_stages-1), ,i+1, i] <- surv[1:(n_stages-3),]
+    AF[n_stages, ,i+1, i] <- colSums(surv[(n_stages-2):(n_stages-1),])
+    
+    B[, i, 3] <- BF[, i, i]
+    B[, i+1, 4] <- tons_at_age %*% AF[3:n_stages, ,i+1, i]/1000
+    BF2[, , i] <- apply(AF[3:n_stages,,,i]/1000,3,function(x)tons_at_age %*%x)      
+  }
+)
 
 ### create a dataframe for plotting
 df_ts <- as.data.frame.table(X)
@@ -136,18 +177,26 @@ names(df_ts2) <- c("Location", "Time", "Source", "Tons")
 df_ts2$Time <- as.numeric(as.character(df_ts2$Time))
 ### generate the plot ###
 
+dataL = melt(BF2, id="x",varnames= c("Location","Time","Iteration"),value.name= "Tons")
+
 ggplot(aes(Time, Tons), data = df_ts2) + 
-  geom_line(aes(colour = Source, linetype = Source),  size = 1) + 
-  scale_linetype_manual(values = c(1, 3, 1)) + 
+  geom_line(aes(Time,Tons,group= Iteration),colour= "blue",data= dataL,size= 0.3)+
+  geom_line(aes(colour = Source, linetype = Source),size= 0.5) +
+  geom_point(aes(colour = Source,size= Source)) +
+  scale_size_manual(values= c(0,1,0,2))+
+  scale_linetype_manual(values = c(1, 3, 1,0)) + 
   plot.options + facet_grid(Location ~ .) + 
-  scale_colour_manual(values = c("red", "black", "blue")) + 
+  scale_colour_manual(values = c("red", "black", "blue","blue")) + 
   ylab("Tons (Thousands)") + 
-  scale_x_continuous(expand = c(0, 0))
+  scale_x_continuous(expand = c(0, 0))+
+  scale_y_continuous(expand = c(0, 0))
+  
+
 ### correlation in recruitment among sites
 cor(t(X[2, , ]))
 
-### correlation in biomass among sites
-cor(t(B[, , 1]))
+### correlation in adult biomass among sites
+cor(t(B[, 1:n_iter, 1]))
 
 
 

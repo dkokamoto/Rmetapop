@@ -1,5 +1,5 @@
 #' Apply a Kalman filter to a time series 
-kalman_assess <- function(TS, sd1, sd2, fit = FALSE, full.ts = FALSE, log = TRUE) {
+kalman_assess <- function(TS, obs_sd, sys_sd, fit = FALSE, full.ts = FALSE, log = TRUE) {
     
     if (fit == TRUE) {
         TSBuild <- function(par) {
@@ -8,15 +8,15 @@ kalman_assess <- function(TS, sd1, sd2, fit = FALSE, full.ts = FALSE, log = TRUE
         TSMLE <- dlmMLE(TS, rep(0, 2), TSBuild)
         TSMod <- TSBuild(TSMLE$par)
     } else {
-        TSBuild <- function(sd1, sd2) {
-            dlmModPoly(1, dV = sd1, dW = sd2)
+        TSBuild <- function(obs_sd, sys_sd) {
+            dlmModPoly(1, dV = obs_sd, dW = sys_sd)
         }
-        TSMod <- TSBuild(sd1 = sd1, sd2 = sd2)
+        TSMod <- TSBuild(obs_sd=obs_sd, sys_sd=sys_sd)
     }
     TSFilt <- dlmFilter(TS, TSMod)
     if (full.ts == TRUE) {
-        return(exp(TSFilt$m[-1] - 0.5 * sd1^2))
+        return(exp(TSFilt$m[-1] - 0.5 * obs_sd^2))
     } else {
-        return(exp(TSFilt$m[length(TSFilt$m)] - 0.5 * sd1^2))
+        return(exp(TSFilt$m[length(TSFilt$m)] - 0.5 * obs_sd^2))
     }
 } 

@@ -24,7 +24,7 @@ ssr_linear <- function(stray_mat, surv_array, fec_at_age,
     
     if (length(dim(surv_mat)) > 2) {
         ### fill in mortality at age
-        for (j in 1:5) {
+        for (j in 1:n_loc) {
             X1[(stage_maturity - 1):n_stages, j] <- surv_array[, , j] %*% X0[, j]
         }
     } else {
@@ -75,14 +75,14 @@ ssr_linear_ode <- function(stray, Z, fec_at_age, eggs,
     
     Zmat <- diag(as.vector(-Z))
     
-    Smat <- matrix(simple_triplet_matrix(row, col, rep(t(stray), each = S)), ncol = 45)
+    Smat <- matrix(simple_triplet_matrix(row, col, rep(t(stray), each = S)), ncol = S*L)
     
     diag(Smat) <- rep(diag(stray), each = S) - 1
     
     Fmat <- diag(as.vector(inst_h), ncol = (L * S), nrow = (L * S))
     
-    A <- rbind(cbind(Zmat + Smat, matrix(0, nrow = 45, ncol = 45)), 
-               cbind(Fmat, matrix(0, nrow = 45, ncol = 45)))
+    A <- rbind(cbind(Zmat + Smat, matrix(0, nrow = (L * S), ncol = (L * S))), 
+               cbind(Fmat, matrix(0, nrow = (L * S), ncol = (L * S))))
     
     inits <- matrix(X0)
     
@@ -96,7 +96,7 @@ ssr_linear_ode <- function(stray, Z, fec_at_age, eggs,
     survivors <- fin[, , 1]
     survivors[S-1, ] <- survivors[S-1, ] + survivors[S, ]    
     
-    X1[3:10,] <- survivors[1:8, ]
+    X1[stage_maturity:n_stages,] <- survivors[1:8, ]
     X1[1, ] <- fec_at_age %*% X1[stage_maturity:n_stages, ]
     if (is.null(alpha)){
       X1[2, ] <- mapply(BH, E = eggs, E0 = E0, h = h, R0 = R0) * exp(errors)

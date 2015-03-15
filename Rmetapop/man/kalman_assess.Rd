@@ -4,7 +4,8 @@
 \alias{kalman_assess}
 \title{Apply a Kalman filter to a time series}
 \usage{
-kalman_assess(TS, sd1, sd2, fit = FALSE, full.ts = FALSE, log = TRUE)
+kalman_assess(TS, obs_sd, sys_sd, fit = FALSE, full.ts = FALSE,
+  log = TRUE)
 }
 \description{
 Apply a Kalman filter to a time series
