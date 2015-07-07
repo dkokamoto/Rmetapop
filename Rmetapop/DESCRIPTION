@@ -3,7 +3,7 @@ Type: Package
 Title: What the package does (short line)
 Version: 1.0
 Date: 2015-02-24
-Authors@R: person("Hadley", "Wickham", email = "hadley@rstudio.com",
+Authors@R: person(“Daniel”, “Okamoto”, email = “okermodei@gmail.com”,
   role = c("aut", "cre"))
 Maintainer: Who to complain to <yourfault@somewhere.net>
 Description: More about what it does (maybe more than one line)
@@ -16,7 +16,6 @@ Depends:
   gtools,
   mvtnorm,
   plyr,
-  parallel,
   reshape2,
   slam,
   scales,
