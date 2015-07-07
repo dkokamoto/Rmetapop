@@ -16,21 +16,44 @@
 
 ssr_linear <- function(stray_mat, surv_array, fec_at_age, 
                             eggs, E0, h , R0, 
+                            tons_at_age,harvest,DI_selectivity,
+                            N_s=NULL,s_ID= NULL, 
                             alpha=NULL,beta=NULL,
                             stage_maturity, errors = 0, X0, n_stages, n_loc) {
     
     ### create empty array
     X1 <- array(as.numeric(NA), dim = c(n_stages, n_loc))
     
-    if (length(dim(surv_mat)) > 2) {
-        ### fill in mortality at age
+    if (length(dim(surv_array)) > 2) {
+    ### fill in mortality at age
         for (j in 1:n_loc) {
             X1[(stage_maturity - 1):n_stages, j] <- surv_array[, , j] %*% X0[, j]
         }
     } else {
         X1[(stage_maturity - 1):n_stages, ] <- surv_array %*% X0
     }
+    
     X1[(stage_maturity - 1):n_stages, ] <- X1[2:n_stages, ] %*% t(stray_mat)
+
+    ### HARVEST with density independent selectivity among locations and stages ###
+    DI_selectivity= rep(1,length(stage_mat:n_stages))
+    
+    h_biomass <-  apply(X1[stage_maturity:n_stages, ],2,function(x)x*tons_at_age)
+    loc_biomass <- colSums(h_biomass)
+    if(!is.null(N_s)){
+      loc_harvest <- as.vector(matrix(mapply(function(x) harvest[x]*loc_biomass[s_ID==x]/sum(loc_biomass[s_ID==x]),1:N_s),ncol= n_loc))
+      post_harvested <- (h_biomass-t(apply(h_biomass,1,
+                        function(x) x/colSums(h_biomass)))*
+                        (DI_selectivity%*%t(loc_harvest)))/tons_at_age      
+    }
+    else{
+      post_harvested <- (h_biomass-t(apply(h_biomass,1,
+                                           function(x) x/colSums(h_biomass)))*
+                           (DI_selectivity%*%t(loc_biomass)))/tons_at_age  
+    }
+    
+    X1[stage_maturity:n_stages, ]<- mapply(max,post_harvested,0.00001)
+    
     X1[1, ] <- fec_at_age %*% X1[stage_maturity:n_stages, ]
     
     # add recruitment 

@@ -1,7 +1,7 @@
 
 ### set up parameters for the simulation test survival & migration function with two
 ### locations ### general parameters ###
-n_loc <- 3  ### number of locations
+n_loc <- 5  ### number of locations
 n_iter <- 100  ### number of years
 n_stages <- 10  ### number of stages including eggs and recruits
 stage_mat <- 3  ### stage # that indicates maturity 
@@ -12,9 +12,9 @@ mort <- matrix(0.334, ncol = n_loc, nrow = length((stage_mat - 1):(n_stages)))
 
 ### create identifier of matrix entries that correspond to mortality for quick
 ### replacement in the array
-mort_mat_id <- array(matrix(1:n_stages^2, ncol = n_stages) %in% c(diag(matrix(1:n_stages^2, 
-                                                                              ncol = n_stages)[-c(1), ]), n_stages^2), dim = c(n_stages, n_stages, n_loc))[-1, 
-                                                                                                                                                           -1, ]
+mort_mat_id <- array(matrix(1:n_stages^2, ncol = n_stages) %in% 
+                       c(diag(matrix(1:n_stages^2, ncol = n_stages)[-c(1), ]), n_stages^2),
+                       dim = c(n_stages, n_stages, n_loc))[-1,-1, ]
 
 ### fecundity at age 3-10
 fec_at_age <- fecundity_age(stage_mat:(n_stages))
@@ -93,8 +93,11 @@ obs_sd <- 0.3
 
 
 ### project the population with stochastic recruitment ###
-system.time(
-  for (i in 3:n_iter) {
+
+  for (i in 1:2) {
+    S_freq[,,i]  <- t(t(X[-c(1,2),,i])/colSums(X[-c(1,2),,i]))
+  }
+system.time(for (i in 3:n_iter) {
     X[, , i] <- ssr_linear_ode(alpha=alpha,beta=beta, fec_at_age = fec_at_age, 
                              n_loc = n_loc, n_stages = n_stages, stage_mat = stage_mat, 
                              eggs = X[1, , i - 2], 
@@ -111,36 +114,8 @@ system.time(
     
     ### observed biomass with observer error
     B[, i, 2] <- B[, i, 1] * exp(rnorm(n_loc, 0, obs_sd) - 0.5 * obs_sd^2)
-    
-    ### Kalman filter with known observer and process error
-    BF[, 1:i, i] <- aaply(log(B[, 1:i, 2]), 1,
-      obs_sd = obs_sd,sys_sd=0.5,
-      fit = FALSE, full.ts= TRUE,
-      kalman_assess)
-  
-    ### apply the known size frequency information to generate observed abundance by adult age class###
-    for (l in 1:n_loc) {
-      AF[3:n_stages, l,1:i, i] <- apply(t(t(S_freq[,l,1:i])*BF[l, 1:i, i]),2,function(x) x/tons_at_age*1000)
-    }  
-    
-    AF[1, ,i-2, i] <- fec_at_age %*% AF[stage_mat:n_stages,,i-2,i]
-    
-    ### calculate expected recruitment assuming the mean BH relationship is known 
-    AF[2, ,i, i] <- mapply(BH, E =  AF[1, ,i-2, i],
-                           alpha= alpha,beta=beta)
-    
-    ### calculate expected survival assuming adult mortality is known 
-    surv <- AF[2:n_stages, ,i, i]*exp(-mort)
-    
-    AF[3:(n_stages-1), ,i+1, i] <- surv[1:(n_stages-3),]
-    AF[n_stages, ,i+1, i] <- colSums(surv[(n_stages-2):(n_stages-1),])
-    
-    B[, i, 3] <- BF[, i, i]
-    B[, i+1, 4] <- tons_at_age %*% AF[3:n_stages, ,i+1, i]/1000
-    BF2[, , i] <- apply(AF[3:n_stages,,,i]/1000,3,function(x)tons_at_age %*%x)      
   }
 )
-
 ### create a dataframe for plotting
 df_ts <- as.data.frame.table(X)
 names(df_ts) <- c("Age", "Location", "Time", "Number")
@@ -193,10 +168,10 @@ ggplot(aes(Time, Tons), data = df_ts2) +
   
 
 ### correlation in recruitment among sites
-cor(t(X[2, , ]))
+levelplot(cor(t(X[2, , ])))
 
 ### correlation in adult biomass among sites
-cor(t(B[, 1:n_iter, 1]))
+levelplot(cor(t(B[, 1:n_iter, 1])))
 
 
 

@@ -39,15 +39,15 @@ spat_temp_ts <- function(n_iter, n_loc, site_sd, spat_sd, phi, cor_mat = NULL, l
     d <- ts(matrix(0, ncol = n_loc, nrow = n_iter))
     
     ### create the spatially correlated ts of errors
-    e <- ts(rmvnorm(n_iter, sigma = vcov_mat))
+    e <- ts(mvrnorm(n_iter,mu=rep(0,n_loc), Sigma = vcov_mat))
     ### use the error vector to populate the ts
     for (i in 2:n_iter) {
         d[i, ] <- phi * d[i - 1, ] + e[i, ]
     }
     
     ### return spatial correlations and pacf are approximately correct
-    fin_pacf_vec <- apply(d, 2, function(x) pacf(x, plot = F, lag_max = 1)$acf)[1, 
-        ]
+    fin_pacf_vec <- apply(d, 2, function(x) pacf(x, plot = F, lag_max = 1)$acf)[1,]
+    
     fin_cor_mat <- cor(d)
     
     ### provide temporal SD for each location ###
@@ -103,4 +103,20 @@ ran_stray_prob <- function(stray_mat,n_iter,scale){
   Crand
 }
 
+#' Generate a series of correlated, random survival matrices
+#' @param stray_mat a mean stray matrix.
+#' @param mean mean survival rate
+#' @param corr the overdispersion parameter
+#' @description Generate a series of random survival elements by sampling from the beta-binomial
+#' @example  /inst/examples/stochastic_stray_matrix_example.R
+#'                                                      
+ran_surv_prob <- function(mean,corr,N=10000){
+  if(!is.null(dim(mean))){
+    M <- apply(mean,1:length(dim(mean)),function(x) rbetabinom(1,size= N,prob= x, rho= corr)/N)
+  }
+  else{
+    M <- rbetabinom(1,size= N,prob= mean, rho= corr)/N
+  }
+  return(M)
+}
 
