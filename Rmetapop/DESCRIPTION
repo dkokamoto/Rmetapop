@@ -16,6 +16,11 @@ Depends:
   gtools,
   mvtnorm,
   plyr,
+  parallel,
   reshape2,
   slam,
-  scales
+  scales,
+  coda,
+  rstan,
+  VGAM,
+  MASS
