@@ -42,7 +42,7 @@ spat_temp_ts <- function(n_iter, n_loc, site_sd, spat_sd, phi, cor_mat = NULL, l
     e <- ts(mvrnorm(n_iter,d[1,],Sigma= vcov_mat))
     ### use the error vector to populate the ts
     for (i in 2:n_iter) {
-        d[i, ] <- (phi * d[i - 1, ] + e[i, ]*site_sd)
+        d[i, ] <- (phi * d[i - 1, ] + e[i, ]*site_sd2)
     }
     
     ### return spatial correlations and pacf are approximately correct
@@ -52,7 +52,11 @@ spat_temp_ts <- function(n_iter, n_loc, site_sd, spat_sd, phi, cor_mat = NULL, l
     ### provide temporal SD for each location ###
     fin_sd_vec <- apply(d, 2, sd)
     if (log == TRUE) {
-        fin_ts <- ts(t(apply(d, 1, "-", colMeans(d) + 0.5 * fin_sd_vec^2)))
+      if(n_loc==1){
+         fin_ts <- ts(apply(d, 1, "-", colMeans(d) + 0.5 * fin_sd_vec^2))
+      } else {
+        fin_ts <-ts(t(apply(d, 1, "-", colMeans(d) + 0.5 * fin_sd_vec^2)))
+      }
     } else {
         fin_ts <- ts(t(apply(d, 1, "-", colMeans(d))))
     }
@@ -77,10 +81,11 @@ spat_cor_mat <- function(n_loc, spat_sd = 1, spat_scale = NULL, sumto1 = FALSE) 
     
     ### now generate the correlation matrix ###
     cor_mat <- matrix(dn1[n_loc:(2 * n_loc - 1)])
-    for (i in 1:(n_loc - 1)) {
-        cor_mat <- cbind(cor_mat, dn1[(n_loc:(2 * n_loc - 1)) - (i)])
+    if(n_loc>1){
+      for (i in 1:(n_loc - 1)) {
+          cor_mat <- cbind(cor_mat, dn1[(n_loc:(2 * n_loc - 1)) - (i)])
+      }
     }
-    
     if (sumto1 == TRUE) {
         cor_mat <- apply(cor_mat,2,function(x) x/sum(x))
     }

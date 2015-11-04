@@ -10,21 +10,30 @@
 #' @param X an S x L matrix of initial abundances of each stage (S) at each location (L).
 #' @param n_stages number of stage classes.
 #' @param n_loc number of locations. 
+#' @param spat_alloc function of spatial allocation of harvest within a stock (currently only the extremes of 1="diffuse", 2="max", or 3="IDF")
+#' @param group_dd groupings for grouped density dependence in the SR function.
 #' @example /inst/examples/survexample.R
 #' @description Generates a single projection including survival followed by straying and reproduction using a matrix algebra in discrete time.
 #' @seealso surv_stray_recr_ode
 
 ssr_linear <- function(stray_mat, surv_array, fec_at_age, 
                             eggs, E0, h , R0, 
-                            tons_at_age,harvest,DI_selectivity,
+                            tons_at_age,harvest,stage_selectivity,
+                            stage_maturity,X0, n_stages, n_loc,
                             N_s=NULL,s_ID= NULL, 
                             alpha=NULL,beta=NULL,
-                            stage_maturity, errors = 0, X0, n_stages, n_loc) {
+                            group_dd=1,
+                            spat_alloc= 1,
+                            errors = 0,
+                            stocklet_list= stocklet_list,
+                            const_harvest= FALSE,
+                            Fmort= NULL) {
     
     ### create empty array
     X1 <- array(as.numeric(NA), dim = c(n_stages, n_loc))
     
     if (length(dim(surv_array)) > 2) {
+    
     ### fill in mortality at age
         for (j in 1:n_loc) {
             X1[(stage_maturity - 1):n_stages, j] <- surv_array[, , j] %*% X0[, j]
@@ -34,36 +43,69 @@ ssr_linear <- function(stray_mat, surv_array, fec_at_age,
     }
     
     X1[(stage_maturity - 1):n_stages, ] <- X1[2:n_stages, ] %*% t(stray_mat)
-
-    ### HARVEST with density independent selectivity among locations and stages ###
-    DI_selectivity= rep(1,length(stage_mat:n_stages))
     
-    h_biomass <-  apply(X1[stage_maturity:n_stages, ],2,function(x)x*tons_at_age)
-    loc_biomass <- colSums(h_biomass)
-    if(!is.null(N_s)){
-      loc_harvest <- as.vector(matrix(mapply(function(x) harvest[x]*loc_biomass[s_ID==x]/sum(loc_biomass[s_ID==x]),1:N_s),ncol= n_loc))
-      post_harvested <- (h_biomass-t(apply(h_biomass,1,
-                        function(x) x/colSums(h_biomass)))*
-                        (DI_selectivity%*%t(loc_harvest)))/tons_at_age      
+    if(sum(harvest[1:n_stocks])>0&!is.na(sum(harvest[1:n_stocks]))){
+      ### HARVEST with density independent selectivity among stages ###
+      stage_selectivity= rep(1,length(stage_mat:n_stages))
+      
+      ### harvestable biomass
+      h_biomass <-  apply(X1[stage_maturity:n_stages, ],2,function(x)x*tons_at_age)
+      
+      ### local harvestable biomass 
+      loc_biomass <- colSums(h_biomass)
+      stock_biomass <- sapply(stocklet_list,function(x) sum(loc_biomass[x]))
+      if(const_harvest == FALSE){
+        harvest <- mapply(min, x= harvest,y=stock_biomass)
+      ### generate local harvest given quota, local biomass and fleet allocation 
+        if(spat_alloc == 1){
+          effort_alloc <- as.vector(sapply(stocklet_list,function(x) as.numeric(loc_biomass[x])/sum(as.numeric(loc_biomass[x]))))
+        }
+        if(spat_alloc == 2){
+          effort_alloc <- as.vector(sapply(stocklet_list,
+               function(x) as.numeric(x==x[which(loc_biomass[x]==max(loc_biomass[x]))])))
+        }
+        if(spat_alloc == 3){
+          effort_alloc <- rep(0,n_loc)
+          for (i in 1:n_stocks) {
+            if (harvest[[i]]>0){
+              Harvest <- set_effort(quota = harvest[[i]],biomass= loc_biomass[stocklet_list[[i]]],n_times= 2)$Harvest
+              effort_alloc[stocklet_list[[i]]] <- Harvest/sum(Harvest)
+            } else {
+              effort_alloc[stocklet_list[[i]]] <- 0
+            }
+          }
+        }
+        
+        loc_harvest <- as.vector(t(apply(matrix(effort_alloc,ncol= n_stocks),1,function(x)x*harvest)))
+        post_harvested <- (h_biomass-t(apply(h_biomass,1,
+                                             function(x) x/colSums(h_biomass)))*
+                             (stage_selectivity%*%t(loc_harvest)))/tons_at_age  
+      } else {
+        loc_harvest <- colSums(Fmort*h_biomass)
+        post_harvested <- (h_biomass-Fmort*h_biomass)/tons_at_age  
+      }
+      X1[stage_maturity:n_stages, ]<- mapply(max,post_harvested,0)
+    } else {
+      loc_harvest <- rep(0,n_stocks)
     }
-    else{
-      post_harvested <- (h_biomass-t(apply(h_biomass,1,
-                                           function(x) x/colSums(h_biomass)))*
-                           (DI_selectivity%*%t(loc_biomass)))/tons_at_age  
-    }
     
-    X1[stage_maturity:n_stages, ]<- mapply(max,post_harvested,0.00001)
-    
-    X1[1, ] <- fec_at_age %*% X1[stage_maturity:n_stages, ]
+    X1[1, ] <- mapply(max, 0.5*(fec_at_age %*% X1[stage_maturity:n_stages, ]),0)
     
     # add recruitment 
     if (is.null(alpha)){
-      X1[2, ] <- mapply(BH, E = eggs, E0 = E0, h = h, R0 = R0) * exp(errors)
+      if(!is.list(group_dd)){
+        X1[2, ] <- mapply(BH, E = eggs, E0 = E0, h = h, R0 = R0) * exp(errors)
+      } else {
+        X1[2, ] <-  mapply(BH,E= eggs,group_E= as.vector(sapply(group_dd,function(x) rep(sum(eggs[x]),each = length(x)))),E0 = E0, h = h, R0 = R0/length(group_dd[[1]]))  * exp(errors)
+      } 
+    } else {
+      if(!is.list(group_dd)){
+        X1[2, ] <- mapply(BH, E = eggs, alpha= alpha,beta=beta) * exp(errors)
+      } else {
+        X1[2, ] <-   mapply(BH,E= eggs,group_E= as.vector(sapply(group_dd,function(x) rep(sum(eggs[x]),each = length(x)))),alpha= alpha, beta= beta/length(group_dd[[1]]))* exp(errors)
+      }
     }
-    else {
-      X1[2, ] <- mapply(BH, E = eggs, alpha= alpha,beta=beta) * exp(errors)
-    }
-    return(X1)
+  return(list(ages=X1, harvest= loc_harvest))
 }
 
 #' Continuous time survival, straying, and harvest with discrete recruitment
@@ -113,18 +155,17 @@ ssr_linear_ode <- function(stray, Z, fec_at_age, eggs,
     fin <- array(t(ode(y = c(X0, rep(0, (S * L))), times = c(0, 1), 
                        func = linear_odes, parms = A, method = method)[2, -1]), 
                  dim = c(S, L, 2))
-    
+  
     ### split survivors and harvests ###
     harvest <- fin[, , 2]
     survivors <- fin[, , 1]
     survivors[S-1, ] <- survivors[S-1, ] + survivors[S, ]    
-    
+
     X1[stage_maturity:n_stages,] <- survivors[1:8, ]
     X1[1, ] <- fec_at_age %*% X1[stage_maturity:n_stages, ]
     if (is.null(alpha)){
       X1[2, ] <- mapply(BH, E = eggs, E0 = E0, h = h, R0 = R0) * exp(errors)
-    }
-    else {
+    } else {
       X1[2, ] <- mapply(BH, E = eggs, alpha= alpha,beta=beta) * exp(errors)
     }
     return(list(X = X1, harvest = harvest))

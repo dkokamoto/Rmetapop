@@ -32,15 +32,17 @@ Fmort <- 0              ### Maximum target fishing mortality (none in this case)
 h_crit <- 0.25          ### Lower biomass threshold
 
 ### warmup and number of simulations.  Warmup = ###
-warmup1 <- 71           ### Warmup prior to inducing fishing 
-warmup2 <-71            ### Warmup prior to measuring statistics 
-totiter <- 72           ### Total number of iterations 
+warmup1 <- 21           ### Warmup prior to inducing fishing 
+warmup2 <-21            ### Warmup prior to measuring statistics 
+totiter <- 22           ### Total number of iterations 
 
 ### function to convert rows of a dataframe to a list for parallel processing
 rows.to.list <- function( df ) {
   ll<-apply(df,1,list)
   ll<-lapply(ll,unlist)
 }
+
+stock_IDs= rep(1:5,each= 10)
 
 ### dataframe of all parameter combinations for the simulations ###
 param.df <- expand.grid(stray_s_scale= stray_s_scale,rec_corr_sd=rec_corr_sd,
@@ -54,11 +56,11 @@ compiled <-fishery_simulate(n_loc=n_loc,n_stages=n_stages,stage_mat=stage_mat,
                          a_bh=a_bh, b_bh=b_bh, phi=0.5,M=M, spat_scale=0.5,
                          spat_sd=0.0001,surv_rho = 0.05,
                          site_sd=0.2,C=1000,obs_sd=0.3,stock_IDs= rep(1:5,each= 10), 
-                         n_iter=3,warmup= 2,point.estimate=FALSE,
+                         n_iter=22,warmup= 21,point.estimate=FALSE,
                          h_crit=0.2, Fmort=0.2)
              
 parallel.sim <- function(x){  
-    x <- as.data.frame(t(x))
+    x <- as.data.frame(param.list[[1]])
     
     assess <- fishery_simulate(n_loc=n_loc,                  ### total number of subpopulations
                                n_stages=n_stages,            ### number of age/stage classes

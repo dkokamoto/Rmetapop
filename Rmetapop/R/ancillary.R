@@ -11,13 +11,18 @@
 #' \deqn{beta = (5*h-1)/(4*h*R0)}
 #' \deqn{h = BH(0.2*E0)/BH(E0)}
 #' @example /inst/examples/BH_example.R
-BH <- function(E, E0=NULL, R0=NULL,h=NULL,  alpha = NULL, beta = NULL) {
+BH <- function(E, E0=NULL, R0=NULL,h=NULL,  alpha = NULL, beta = NULL,group_E=NULL) {
+    if(is.null(group_E)){
+      group_E <- E
+    } else {
+      group_E <- group_E
+    }
     if (!is.null(h)) {
         alpha_h <- (E0 * (1 - h))/(4 * h * R0)
         beta_h <- (5 * h - 1)/(4 * h * R0)
-        E/(alpha_h + beta_h * E)
+        E/(alpha_h + beta_h * group_E)
     } else {
-        E/(alpha + beta * E)
+        E/(alpha + beta * group_E)
     }
 }
 
@@ -53,7 +58,8 @@ linear_odes <- function(t, state, A) {
     list(as.vector(dX))
 } 
 
-#' Simulate from the linear stage structured model with a stock assessment
+
+#' A wrapper to simulate a linear stage structued model with a stock assessment and harvest
 #' @param n_loc  number of locations at which a stock assessment is implemented
 # #n_subloc <- rep(10,5) ### vector of number of sublocations
 #' @param n_iter  number of years to simulate, including the warmup period
@@ -73,14 +79,30 @@ linear_odes <- function(t, state, A) {
 #' @param site_sd overall log-scale recruitment standard deviation 
 #' @example /inst/examples/assessment_example.R
 
-fishery_simulate <- function(n_loc,stock_IDs,n_stages,stage_mat,
-                             a_bh, b_bh, phi,M, spat_scale,spat_sd,surv_rho=0.05,
-                             site_sd,C,obs_sd,cor_mat=NULL,
-                             n_iter,point.estimate,warmup,
-                             h_crit=0.4,Fmort=0.2,
-                             fit.compile= NULL){
+fishery_simulate <- function(n_loc,stock_IDs,
+                             a_bh, b_bh, phi, 
+                             spat_scale,spat_sd,
+                             site_sd,C,obs_sd,
+                             M=0.47,
+                             n_iter=53,warmup=10,
+                             warmup2= 13,
+                             spat_alloc= 1,
+                             surv_rho=0.05,
+                             cor_mat=NULL,
+                             collective_dd=FALSE,
+                             h_crit=0.25,Fmort=0.2,
+                             assessment=FALSE,
+                             point.estimate= FALSE,
+                             n_stages= 10,stage_mat= 3,
+                             fit.compile= NULL,
+                             repetitions = 1,
+                             const_harvest=FALSE){
+
+  n_stocks <- length(unique(stock_IDs))
   
-  Nstocks <- length(unique(stock_IDs))
+  ### list of unique stocklets ###
+  stocklet_list <- split(1:n_loc, stock_IDs)
+
   
   ### 9 x L mortality matrix (can also be a single number or a single row with L
   ### columns)
@@ -105,7 +127,7 @@ fishery_simulate <- function(n_loc,stock_IDs,n_stages,stage_mat,
   stray_probs <- spat_cor_mat(n_loc, spat_scale = spat_scale, sumto1 = TRUE)
   #round(stray_probs,2)# columns are probability of coming from, and row is probability going to (i.e. column 2 row 1 is going from location 2 to location 1)
   #colSums(stray_probs) # check to make sure it sums to 1
- 
+  
   ### stochastic realizations of the stray matrix for each year using the Dirichlet
   ### distribution with scale = 1000 (higher = less stochastic probabiliies)
   Crand <- ran_stray_prob(stray_mat=stray_probs,n_iter=n_iter,scale= C)
@@ -113,19 +135,29 @@ fishery_simulate <- function(n_loc,stock_IDs,n_stages,stage_mat,
   mean_stray <- apply(Crand,c(1,2),mean)
   ### create matrices and vectors from parameters ### create spatiotemporal
   ### recruitment errors
-  errors <- spat_temp_ts(n_iter = n_iter, n_loc = n_loc,
+  if(site_sd!=0){
+    errors <- spat_temp_ts(n_iter = n_iter, n_loc = n_loc,
                          site_sd = site_sd, spat_sd =spat_sd, 
                          phi = phi,cor_mat=NULL)
+    error_mat <- errors$ts  ### save the ts for use in the simulation 
+  } else {
+    error_mat <- matrix(0,ncol= n_loc,nrow= n_iter)
+  }
   
-  errors$cor_mat  ### correlation matrix among sites in log-scale recruitment error 
-
-  errors$pacf  ### within site partial-autocorrelation function  
-  error_mat <- errors$ts  ### save the ts for use in the simulation 
+  if(assessment== FALSE){
+    if( obs_sd !=0){
+          obs_error_mat <- matrix(spat_temp_ts(n_iter = n_iter, n_loc = 2,
+                               site_sd = obs_sd, spat_sd =0.00001, 
+                               phi = 0,cor_mat=NULL)$ts,ncol= n_stocks)
+    } else{
+      obs_error_mat <- matrix(0,ncol= n_stocks,nrow= n_iter)
+    }
+  }
   
   ### initial conditions ### create the data arrays
   d1 <- c(0, 2:n_stages)
   d2 <- paste("Location", 1:n_loc, sep = "_")
-  d2b <- paste("Stock",1:Nstocks,sep= "_")
+  d2b <- paste("Stock",1:n_stocks,sep= "_")
   d3 <- 1:n_iter
   
   ## set up the abundance array
@@ -133,66 +165,85 @@ fishery_simulate <- function(n_loc,stock_IDs,n_stages,stage_mat,
   X[, , 1:2] <- matrix(rep(1e+08, each = n_loc), ncol = n_loc, byrow = T)
   
   ## set up the adult biomass array
-  B <- array(NA, dim = c(n_loc, n_iter+1), dimnames = list(d2, 1:(n_iter+1)))
-  B_s <- array(NA, dim = c(Nstocks, n_iter+1,2), dimnames = list(d2b, 1:(n_iter+1),c("actual","observed")))
+  B <- array(NA, dim = c(n_loc, n_iter), dimnames = list(d2, 1:(n_iter)))
+  B_s <- array(NA, dim = c(n_stocks, n_iter,2), dimnames = list(d2b, 1:(n_iter),c("actual","observed")))
   B[, 1] <- tons_at_age %*% X[3:10,, 1]
   B[, 2] <- tons_at_age %*% X[3:10,, 2]
   
-  for(i in 1:Nstocks){
+  for(i in 1:n_stocks){
     B_s[i, 1,] <- sum(B[stock_IDs==i, 1])
     B_s[i, 2,] <- sum(B[stock_IDs==i, 2])
   }
   
   ## set up the Forecast adult biomass array
-  BF <- array(NA, dim = c(Nstocks, n_iter+1, n_iter,6), dimnames = list(d2b, 1:(n_iter+1), d3,c("Estimated Stock Size","Prediction","ESS_UP","ESS_LOW","P_UP","P_LOW")))
+  BF <- array(NA, dim = c(n_stocks, n_iter+1, n_iter,6), dimnames = list(d2b, 1:(n_iter+1), d3,c("Estimated Stock Size","Prediction","ESS_UP","ESS_LOW","P_UP","P_LOW")))
   
-  ## set up the age frequnecy arrays
+  ## set up the age frequency arrays
   S_freq <- array(NA, dim = c(n_stages-2,n_loc, n_iter), dimnames = list(d1[-c(1,2)],d2,d3))
-  S_freq_s <- array(NA, dim = c(n_stages-2,Nstocks, n_iter), dimnames = list(d1[-c(1,2)],d2b,d3))
+  S_freq_s <- array(NA, dim = c(n_stages-2,n_stocks, n_iter), dimnames = list(d1[-c(1,2)],d2b,d3))
   
   for (i in 1:2){
     S_freq[,,i]  <- t(t(X[-c(1,2),,i])/colSums(X[-c(1,2),,i]))
-    SN <- mapply(function(x) rowSums(X[-c(1,2),stock_IDs==x,i]),1:Nstocks)
+    SN <- mapply(function(x) rowSums(X[-c(1,2),stock_IDs==x,i]),1:n_stocks)
     S_freq_s[,,i]  <- t(t(SN)/colSums(SN))
   }
   
-  H <- array(NA, dim = c(n_iter+1,Nstocks), dimnames = list(1:(n_iter+1),d2b))
+  H <- array(NA, dim = c(n_iter+1,n_stocks), dimnames = list(1:(n_iter+1),d2b))
+  H_loc <- array(NA, dim = c(n_iter+1,n_loc), dimnames = list(1:(n_iter+1),d2))
   
   for (i in 1:n_iter){
     H[i,]  <- 0
+    H_loc[i,] <- 0
   }
+  
+  if(collective_dd==0){
+    group_dd <- stocklet_list
+  }else{
+    group_dd <- FALSE
+  }
+  
   for (i in 3:n_iter) {
-    surv_array[surv_array_id] <- ran_surv_prob(mean=exp(-mort),corr=surv_rho)
-    X[, , i] <- ssr_linear(alpha=a_bh,beta=b_bh, fec_at_age = fec_at_age, 
-                           n_loc = n_loc, n_stages = n_stages,harvest=rep(0,Nstocks),
-                           tons_at_age=tons_at_age,
-                           DI_selectivity= rep(1,length(stage_mat:n_stages)),
-                           stage_maturity = stage_mat,
-                           surv_array = surv_array,
-                           s_ID=stock_IDs,N_s=Nstocks,
-                           eggs = X[1, , i - 2], X0 = X[(stage_mat - 1):n_stages, , i - 1],
-                           stray_mat = stray_probs, errors = 0)
+    surv_array[surv_array_id] <- exp(-mort)
+    X[, , i]  <-  ssr_linear(alpha=a_bh,beta=b_bh, fec_at_age = fec_at_age, 
+                             n_loc = n_loc, 
+                             n_stages = n_stages,
+                             harvest=rep(0,n_stocks),
+                             tons_at_age=tons_at_age,
+                             stage_selectivity= rep(1,length(stage_mat:n_stages)),
+                             stage_maturity = stage_mat,
+                             surv_array = surv_array,              
+                             group_dd= group_dd,
+                             stocklet_list=stocklet_list,
+                             spat_alloc= spat_alloc,
+                             s_ID=stock_IDs,N_s=n_stocks,
+                             eggs = X[1, , i - 2], X0 = X[(stage_mat - 1):n_stages, , i - 1],
+                             stray_mat = stray_probs, errors =  0)$ages
     
     B[, i] <- tons_at_age %*% X[3:10, , i]
-    B_s[, i,] <- mapply(function(x) sum(B[stock_IDs==x,i]),1:Nstocks) 
+    B_s[, i,] <- mapply(function(x) sum(B[stock_IDs==x,i]),1:n_stocks) 
     ### age frequency ###
-    SN <- mapply(function(x) rowSums(X[-c(1,2),stock_IDs==x,i]),1:Nstocks)
+    SN <- mapply(function(x) rowSums(X[-c(1,2),stock_IDs==x,i]),1:n_stocks)
     S_freq[,,i]  <- t(t(X[-c(1,2),,i])/colSums(X[-c(1,2),,i]))
     S_freq_s[,,i]  <- t(t(SN)/colSums(SN))
   } 
   
-  B0 <- tons_at_age %*% mapply(function(x) rowSums(X[-c(1,2),stock_IDs==x,n_iter]),1:Nstocks)
-  B0_loc <- tons_at_age %*% X[-c(1,2),,n_iter]
-  if(is.null(fit.compile)){
-  fit.compile <- nlss_assess(b_obs=array(B0,dim= c(Nstocks,n_iter)),
-                             b_true=array(B0,dim= c(Nstocks,n_iter)),
-                             age_freq=S_freq_s[,,1:n_iter],obs_sd=obs_sd,sd_R=site_sd,
-                             alpha_BH= a_bh,beta_BH=b_bh/(n_loc/Nstocks),harvest= H[1:n_iter,],
-                             selectivity=rep(1,length(stage_mat:n_stages)),n_loc=Nstocks,
-                             fec_at_age=fec_at_age,weight_at_age=tons_at_age,
-                             mort=rep(M,Nstocks),stage_mat=stage_mat,
-                             n_stages=n_stages,phi=phi,n_warmup=3,
-                             compile=TRUE,optimize=point.estimate,n_iter=n_iter)
+  ### estimate B0  for each stock and stocklet
+  B0 <- sapply(stocklet_list, function(x) sum(B[x,n_iter],na.rm= T))
+  B0_loc <- B[,n_iter]
+  
+  ### estimate beta for the BH parameters
+  model_beta <- 1/mean(X[2,,n_iter-1])/(n_loc/n_stocks)
+  
+  if(assessment==TRUE){
+    fit.compile <- nlss_assess(b_obs=array(B0,dim= c(n_stocks,n_iter)),
+                               b_true=array(B0,dim= c(n_stocks,n_iter)),
+                               age_freq=S_freq_s[,,1:n_iter],obs_sd=obs_sd,sd_R=site_sd,
+                               alpha_BH= a_bh,beta_BH=model_beta,harvest= H[1:n_iter,],
+                               selectivity=rep(1,length(stage_mat:n_stages)),n_stocks=n_stocks,
+                               fec_at_age=fec_at_age,weight_at_age=tons_at_age,
+                               mort=rep(M,n_stocks),stage_mat=stage_mat,
+                               n_stages=n_stages,phi=phi,n_warmup=3,
+                               compile=TRUE,optimize=point.estimate,n_iter=n_iter)
   }
   
   ### reset initial values as last two values of deterministic simulation 
@@ -205,96 +256,181 @@ fishery_simulate <- function(n_loc,stock_IDs,n_stages,stage_mat,
     S_freq[,,i]  <- S_freq[,,n_iter-2+i]
     S_freq_s[,,i]  <- S_freq_s[,,n_iter-2+i]
   }
-  
-  ### project the population with stochastic recruitment and harvesting ###
-  for (i in 3:(n_iter)) {
-    ptm <- proc.time()
-    surv_array[surv_array_id] <- ran_surv_prob(mean=exp(-mort),corr=surv_rho)
-    X[, , i] <- ssr_linear(alpha=a_bh,beta=b_bh, fec_at_age = fec_at_age, 
-                           n_loc = n_loc, n_stages = n_stages,
-                           N_s=Nstocks,s_ID=stock_IDs,
-                           tons_at_age=tons_at_age,harvest=H[i,],
-                           stage_maturity = stage_mat,
-                           surv_array = surv_array,
-                           DI_selectivity= rep(1,length(stage_mat:n_stages)),
-                           eggs = X[1, , i - 2], 
-                           X0 = X[(stage_mat - 1):n_stages, , i - 1],
-                           stray_mat = Crand[,, i - 1], errors = errors$ts[i - 1, ])
+  ### project the population with stochastic recruitment and harvesting ###repea?
+  for (i in 3:n_iter) {  
+    #surv_array[surv_array_id] <- ran_surv_prob(mean=exp(-mort),corr=surv_rho)
+    surv_array[surv_array_id] <- exp(-mort)
+    projection <- ssr_linear(alpha=a_bh,beta=b_bh, 
+                             fec_at_age = fec_at_age, 
+                             n_loc = n_loc,
+                             n_stages = n_stages,
+                             N_s=n_stocks,
+                             s_ID=stock_IDs,
+                             spat_alloc=spat_alloc,
+                             group_dd= group_dd,
+                             stocklet_list=stocklet_list,
+                             tons_at_age=tons_at_age,
+                             harvest=H[i,],
+                             stage_maturity = stage_mat,
+                             surv_array = surv_array,
+                             stage_selectivity= rep(1,length(stage_mat:n_stages)),
+                             eggs = X[1, , i - 2], 
+                             X0 = X[(stage_mat - 1):n_stages, , i - 1],
+                             stray_mat = Crand[,, i - 1], errors = error_mat[i - 1, ],
+                             const_harvest =const_harvest,Fmort= Fmort)
+
+    X[, , i] <- projection$ages            
+    H_loc[i,] <- projection$harvest
     
     B[, i] <- tons_at_age %*% X[3:10, , i]
-    B_s[, i,1] <-  mapply(function(x) sum(B[stock_IDs==x,i]),1:Nstocks) 
-    B_s[, i,2] <- B_s[, i,1]* exp(rnorm(Nstocks, 0, obs_sd) - 0.5 * obs_sd^2)
+    B_s[, i,1] <- sapply(stocklet_list,function(x) sum(B[x,i]))
+    B_s[, i,2] <- B_s[, i,1]* exp(rnorm(n_stocks, 0, obs_sd) - 0.5 * obs_sd^2)
     
     ### age frequency ###
-    SN <- mapply(function(x) rowSums(X[-c(1,2),stock_IDs==x,i]),1:Nstocks)
+    SN <- mapply(function(x) rowSums(X[-c(1,2),stock_IDs==x,i]),1:n_stocks)
     S_freq[,,i]  <- t(t(X[-c(1,2),,i])/colSums(X[-c(1,2),,i]))
     S_freq_s[,,i]  <- t(t(SN)/colSums(SN))
     
-    ### stock assessment
+    ### harvest allocation
     if(i>warmup){  
-      if(i==warmup+1){
-        assess <- nlss_assess(b_obs=B_s[, 1:i,2],b_true=B_s[, 1:i,1],sd_R=site_sd,
-                            age_freq=S_freq_s[,,1:i],obs_sd=obs_sd,
-                            alpha_BH= a_bh,beta_BH=I(b_bh/(n_loc/Nstocks)),harvest= H[1:i,],
-                            selectivity=rep(1,length(stage_mat:n_stages)),n_loc=Nstocks,
-                            fec_at_age=fec_at_age,weight_at_age=tons_at_age,
-                            mort=rep(M,Nstocks),stage_mat=stage_mat,
-                            n_stages=n_stages,phi=phi,n_warmup=3,compile= FALSE,
-                            n_iter=i,optimize=point.estimate,compiled_model= fit.compile)
-      }
-      else{
-        assess <- nlss_assess(b_obs=B_s[, 1:i,2],b_true=B_s[, 1:i,1],sd_R=site_sd,
-                            age_freq=S_freq_s[,,1:i],obs_sd=obs_sd,
-                            alpha_BH= a_bh,beta_BH=I(b_bh/(n_loc/Nstocks)),harvest= H[1:i,],
-                            selectivity=rep(1,length(stage_mat:n_stages)),n_loc=Nstocks,
-                            fec_at_age=fec_at_age,weight_at_age=tons_at_age,
-                            mort=rep(M,Nstocks),stage_mat=stage_mat,
-                            n_stages=n_stages,phi=phi,n_warmup=3,compile= FALSE,
-                            n_iter=i,optimize=point.estimate,compiled_model= fit.compile,
-                            sd_pro = sd_process)
-      }
-      if(point.estimate==TRUE){
-        BF[, 1:(i), i,1] <- t(assess$assess$mean)
-        BF[, 1:(i+1), i,2] <- t(assess$assess$pred)
-      }
-      else{
-        BF[, 1:(i), i,1] <- t(assess$assess$mean)
-        BF[, 1:(i+1), i,2] <- t(assess$assess$pred)
-        BF[, 1:(i), i,3] <- t(assess$assess$upper)
-        BF[, 1:(i), i,4] <- t(assess$assess$lower)
-        BF[, 1:(i+1), i,5] <- t(assess$assess$pred_upper)
-        BF[, 1:(i+1), i,6] <- t(assess$assess$pred_lower)
+      if (assessment== TRUE){
+        if(i==warmup+1){
+          start <- max(1,i-20)
+          assess_iter <- (i-start+1)
+          assess <- nlss_assess(b_obs=B_s[, start:i,2],b_true=B_s[, start:i,1],sd_R=site_sd,
+                                age_freq=S_freq_s[,,start:i],obs_sd=obs_sd,
+                                alpha_BH= a_bh,beta_BH=model_beta,harvest= H[start:i,],
+                                selectivity=rep(1,length(stage_mat:n_stages)),n_stocks=n_stocks,
+                                fec_at_age=fec_at_age,weight_at_age=tons_at_age,
+                                mort=rep(M,n_stocks),stage_mat=stage_mat,
+                                n_stages=n_stages,phi=phi,n_warmup=3,compile= FALSE,
+                                n_iter=assess_iter,optimize=point.estimate,compiled_model= fit.compile)
+        } else {
+          assess <- nlss_assess(b_obs=B_s[, start:i,2],b_true=B_s[, start:i,1],sd_R=site_sd,
+                                age_freq=S_freq_s[,,start:i],obs_sd=obs_sd,
+                                alpha_BH= a_bh,beta_BH=model_beta,harvest= H[start:i,],
+                                selectivity=rep(1,length(stage_mat:n_stages)),n_stocks=n_stocks,
+                                fec_at_age=fec_at_age,weight_at_age=tons_at_age,
+                                mort=rep(M,n_stocks),stage_mat=stage_mat,
+                                n_stages=n_stages,phi=phi,n_warmup=3,compile= FALSE,
+                                n_iter=assess_iter,optimize=FALSE,compiled_model= fit.compile,
+                                sd_pro = sd_process)
+        }
+        if(point.estimate==TRUE){
+          BF[, start:(i), i,1] <- t(assess$assess$mean)
+          BF[, start:(i+1), i,2] <- t(assess$assess$pred)
+        }
+        else{
+          BF[, start:(i), i,1] <- t(assess$assess$mean)
+          BF[, start:(i+1), i,2] <- t(assess$assess$pred)
+          BF[, start:(i), i,3] <- t(assess$assess$upper)
+          BF[, start:(i), i,4] <- t(assess$assess$lower)
+          BF[, start:(i+1), i,5] <- t(assess$assess$pred_upper)
+          BF[, start:(i+1), i,6] <- t(assess$assess$pred_lower)
+        }
+        
+        sd_process <- assess$sd_pro
+        cat(noquote(paste("iteration",i, "of", n_iter, "completed in", signif(proc.time()[3]-ptm[3],digits=4),"sec\n")))
+        ### forecast array 
+      } else {          
+        stock_surv <- lapply(stocklet_list,function(x) apply(surv_array[,,x],c(1,2),mean))
+        for (j in 1:n_stocks) {   
+          BF[j, i+1, i,2] <- tons_at_age%*%(stock_surv[[j]]%*%sapply(stocklet_list,function(x) rowSums(X[(stage_mat - 1):n_stages,x , i]))[,j])[2:9]*exp(obs_error_mat[i,j])
+        }
       }
       
-      sd_process <- assess$sd_pro
-      ### forecast array 
       to_fish <- ifelse(h_crit*B0<BF[,i+1,i,2],1,0)
-      H[i+1,] <- mapply(min,BF[,i+1,i,2]-h_crit*B0,Fmort*BF[,i+1,i,2])*to_fish
-      cat(noquote(paste("iteration",i, "of", n_iter, "completed in", signif(proc.time()[3]-ptm[3],digits=4),"sec\n")))
-    }
-    else{
-      H[i+1,] <- rep(0,Nstocks)
+      H[i+1,] <- Fmort*BF[,i+1,i,2]*to_fish
+    } else {
       if(i==warmup){
-        cat(noquote(paste("iterations 1:",i," of ",n_iter," complete (warmup)\n",sep= "")))
+        if(assessment== TRUE){
+          cat(noquote(paste("iterations 1:",i," of ",n_iter," complete (warmup)\n",sep= "")))
+        }
       }
+      H[i+1,] <- rep(0,n_stocks) 
     }
+  }  
+  
+  ### generate summaries from the simulation 
+  
+  stock_catch =matrix(sapply(stocklet_list,function(x) rowSums(H_loc[,x])),ncol= n_stocks)
+  g_mu_catch =mean(rowSums(matrix(stock_catch[warmup2:n_iter,]),na.rm= T))
+  
+  metrics_df <- data.frame(list(
+    p_cv =mean(apply(B[,warmup2:n_iter],1,sd)/apply(B[,warmup2:n_iter],1,mean)),
+    s_cv =mean(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),1,sd)/apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks) ,1,mean)),
+    g_cv =sd(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),2,mean))/mean(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),2,mean)),
+    
+    ### mean and equilibrium biomass
+    p_mu =mean(apply(B[,warmup2:n_iter],1,mean)),
+    s_mu =mean(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),1,mean))),
+    g_mu =mean(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),2,mean)),
+    
+    s_b0 =mean(B0_loc),
+    p_b0 =mean(B0),
+    g_b0 =sum(B0),
+    
+    ### overfishing metrics
+    p_of =mean(apply(B[,warmup2:n_iter],2,function(x) x<=h_crit*B0_loc)),
+    s_of =mean(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),2,function(x) x<=h_crit*B0)),
+    g_of =mean(!(colMeans(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),2,function(x) x<=h_crit*B0))<1)),
+    
+    ### mean depletion length
+    g_dep_l =dep_length(colMeans(apply(matrix(B_s[,warmup2:n_iter,1]),2,function(x) x<=h_crit*B0)!=0)),
+    s_dep_l =mean(apply(apply(matrix(B_s[,warmup2:n_iter,1]),2,function(x) x<=h_crit*B0),1,dep_length),na.rm= T),
+    p_dep_l =mean(apply(apply(B[,warmup2:n_iter],2,function(x) x<=h_crit*B0_loc),1,dep_length),na.rm= T),
+    
+    ### mean annual catch 
+    g_mu_catch = g_mu_catch,
+    
+    ### average annual variation in catch 
+    g_aav =mean(abs(diff(rowSums(H_loc[warmup2:n_iter,]))),na.rm= T)/g_mu_catch,
+    s_aav =mean(apply(matrix(stock_catch[warmup2:n_iter,]),2,function(x) mean(abs(diff(x)),na.rm= T)))/(g_mu_catch/n_stocks),
+    p_aav =mean(apply(H_loc[warmup2:n_iter,],2,function(x) mean(abs(diff(x)),na.rm= T)))/(g_mu_catch/n_loc),
+    
+    ### average variability in catch 
+    g_catch_sd =sd(rowSums(H_loc[warmup2:n_iter,]),na.rm=T)/g_mu_catch,
+    s_catch_sd =mean(apply(matrix(stock_catch[warmup2:n_iter,]),2,function(x) sd(x,na.rm= T)))/(g_mu_catch/n_stocks),
+    p_catch_sd =mean(apply(H_loc[warmup2:n_iter,],2,sd,na.rm= T))/(g_mu_catch/n_loc),
+    
+    ### autocorrelaton in biomass 
+    g_phi =pacf(colMeans(matrix(B_s[,,1],nrow= n_stocks),na.rm=T),na.action=na.pass,plot= FALSE)$acf[1],
+    s_phi =mean(apply(matrix(B_s[,,1],nrow= n_stocks),1,function(x) pacf(x,na.action=na.pass,plot= FALSE)$acf[1])),
+    p_phi =mean(apply(B,1,function(x) pacf(x,na.action=na.pass,plot= FALSE)$acf[1]))
+  )
+  
+  ### spectral density at different frequencies in biomass
+  if(mean(B[,warmup2:n_iter])==0){
+    b <- NA; s<- NA; g <- NA;
+  } else {
+    p <- spec.pgram(t((B[,warmup2:n_iter]/rowMeans(B[,warmup2:n_iter]))[rowMeans(B[,warmup2:n_iter])>0,]),plot= FALSE)
+    freq <- p$freq
+    p <- rowMeans(p$spec)
+    s <- rowMeans(spec.pgram(t((matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks)/rowMeans(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks)))[rowMeans(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks))>0,]),plot= FALSE)$spec)
+    g <- spec.pgram(colMeans(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks))/mean(colMeans(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks))),plot= FALSE)$spec
   }
+  spec_df <- data.frame(pop_spec=p,stock_spec=s,glob_spec= g,freq= freq)
   
-  B0.df <- melt(B0,varnames=c("time","location"),value.name= "B0") 
+  probs =seq(0.05,0.95,0.05)
+  ### biomass quantiles
+  quantile_df <- data.frame(list(
+    p_b =rowMeans(apply(B[,warmup2:n_iter],1,quantile, probs)),
+    s_b = rowMeans(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),1,quantile, probs)),
+    g_b = quantile(colSums(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks)), probs),
+    p_c = rowMeans(apply(H_loc,2,quantile, probs,na.rm= T)),
+    s_catch = rowMeans(apply(stock_catch,2,quantile, probs,na.rm=T)),
+    g_c = quantile(rowSums(stock_catch,na.rm=T), probs,na.rm=T)
+    )
+  )
   
-  pred <- melt(apply(BF[,-1,,2],1,diag),varnames=c("time","site"),value.name= "pred")
-  mean <- melt(apply(BF[,-n_iter,,1],1,diag),varnames=c("time","site"),value.name= "mean")
-  forecast_array <- join(pred,mean,by =c("time","site"))
+  r_sigma <- sd(log(apply(X[2,,warmup2:n_iter],2,sum)))
   
-    ### correlation in recruitment among sites
-    rec_cor <- cor(t(X[2, ,warmup:n_iter ]))
-  #   
-    ### correlation in biomass among sites
-    B_cor <- cor(t(B[, warmup:n_iter]))
+  quantile_df$quants <- row.names(quantile_df)
+ 
+  return(list(metrics= metrics_df,spec= spec_df,quantiles= quantile_df,r_sigma= r_sigma))
   
-  return(list(B=B,assess=BF,B_stocks=B_s,ages=X,B0=B0.df,Harvest=H,forecast=forecast_array,
-              #plot_biomass=plot1,plot_nums=plot2,
-              compiled= fit.compile, corrs= list(productivity = errors$cor_mat,recruitment=rec_cor,
-                                                 biomass=B_cor,B0_loc,stray = mean_stray)))
 }
+
+
+
 
