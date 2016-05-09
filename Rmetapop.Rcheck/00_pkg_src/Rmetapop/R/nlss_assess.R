@@ -31,18 +31,18 @@ nlss_assess <- function(b_obs,b_true,age_freq,obs_sd,alpha_BH,sd_R,
                        beta_BH,fec_at_age,weight_at_age,mort,
                        stage_mat,n_stages,
                        harvest,selectivity,
-                       n_stocks,n_iter,phi,
+                       n_stocks,phi,
                        plot= TRUE,
                        n_warmup=3,MCMC.iter=200,forecast_limit=0.95,
                        optimize=TRUE,compile=TRUE,compiled_model=NULL,
                        init_states= NULL,sd_pro= NULL){
   
-  ### get biomass to abundance at age conversion given size frequency and size at age
-
-  ### generate a list of data for the 
+  ### dimensions of the observed biomass array
+  n_iter <- dim(t(b_obs))[1]
+  
+  ### generate a list of data for the assessment
   model_data <- list(B_obs= t(b_obs),
              sigma_obs=obs_sd,
-             alpha=alpha_BH,
              beta=beta_BH,
              fec_aa=fec_at_age,
              w_aa=weight_at_age,
@@ -55,9 +55,7 @@ nlss_assess <- function(b_obs,b_true,age_freq,obs_sd,alpha_BH,sd_R,
              n_stocks= n_stocks,
              H=harvest,
              S=selectivity,
-             n_w = 3,
-             phi= phi,
-             offset = sd_R^2/(1-phi^2)/2)
+             n_w = 3)
 
   ### list of parameters to save ###
   params<- c("sigma_pro","B_hat","B")
@@ -79,7 +77,7 @@ model <- '
   data {
     int n_stocks; // number of stocks
     int n_ages; // number of ages
-    int n_i; // number of iterations
+    int n_i; // number of periods
     int n_w;// number of warmup iterations
     row_vector<lower=0.000001>[n_ages] fec_aa; // fecundity at age
     row_vector[n_ages] w_aa; // weight at age
@@ -88,7 +86,6 @@ model <- '
     vector[n_ages] BpN[n_i,n_stocks]; //biomass per number
     vector[n_stocks] H[n_i]; //harvest
     vector[n_ages] S; //selectivity
-    real alpha; // alpha
     real beta; // beta
     vector[n_stocks] surv; //survival
     real phi;
@@ -100,6 +97,7 @@ model <- '
     real<lower= 0.000001,upper=5> sigma_pro; // process error variance
     vector<lower= 0.000001,upper=300>[n_stocks] B_hat[n_i];
     real<lower=-4,upper=4> epsilon[n_i+1-n_w,n_stocks];
+    real<lower=700,upper= 6000> alpha; // alpha
   }
 
   transformed parameters {
@@ -161,7 +159,7 @@ model <- '
   ### one-year ahead forecast given the model 
    for (j in 1:n_stocks){
         ### number of three year olds ###
-        R[n_i+1,j] <- (fec_aa*(BpN[n_i-2,j]*B_hat[n_i-2,j]))/(alpha + beta * (fec_aa*(BpN[n_i-2,j]*B_hat[n_i-2,j])))*surv[j];;
+        R[n_i+1,j] <- (fec_aa*(BpN[n_i-2,j]*B_hat[n_i-2,j]))/(alpha + beta * (fec_aa*(BpN[n_i-2,j]*B_hat[n_i-2,j])));
         N[n_i+1,j,1] <- R[n_i+1,j]*exp(eps_phi[n_i+1-n_w,j]-offset)*surv[j];     
         for (k in 2:(n_ages-1)){
           N[n_i+1,j,k] <- BpN[n_i,j,k-1]*B_hat[n_i,j]*surv[j];
@@ -204,12 +202,12 @@ else{
  }
  else{
    if(is.null(init_states)){
-    fit.assess <- invisible(stan(model_code= model,data= model_data,pars= params,
+    fit.assess <- invisible(sampling(object= compiled_model,data= model_data,pars= params,
                     iter= MCMC.iter,warmup= n.burnin,chains=n.chains,
                     init= "random",seed= set.seed,refresh=0))
   }
   else{
-    fit.assess <- invisible(stan(model_code= model,data= model_data,pars= params,
+    fit.assess <- invisible(sampling(object= compiled_model,data= model_data,pars= params,
                                  iter= MCMC.iter,warmup= n.burnin,chains=n.chains,
                                  init= inits,seed= set.seed,refresh=0))
   }
@@ -227,4 +225,118 @@ else{
       return(list(fit=fit.assess,assess=assessment))
     }
   }
+}
+
+
+nlss_compile <- function(){
+  model <- '
+    data {
+      int n_stocks; // number of stocks
+      int n_ages; // number of ages
+      int n_i; // number of periods
+      int n_w;// number of warmup iterations
+      row_vector<lower=0.000001>[n_ages] fec_aa; // fecundity at age
+      row_vector[n_ages] w_aa; // weight at age
+      vector<lower=0>[n_stocks] B_obs[n_i]; // observed biomass
+      real sigma_obs; // observation error for biomass
+      vector[n_ages] BpN[n_i,n_stocks]; //biomass per number
+      vector[n_stocks] H[n_i]; //harvest
+      vector[n_ages] S; //selectivity
+      real beta; // beta
+      vector[n_stocks] surv; //survival
+    }
+    
+    parameters {
+      real<lower= 0.000001,upper=5> sigma_pro; // process error variance
+      vector<lower= 0.000001,upper=300>[n_stocks] B_hat[n_i];
+      real<lower=-4,upper=4> epsilon[n_i+1-n_w,n_stocks];
+      real<lower=700,upper= 6000> alpha; // alpha
+      real<lower=0.00001,upper= 1> sigma_R;
+      real<lower=-0.9,upper=0.9> phi;
+    }
+    
+    transformed parameters {
+      vector<lower= 0.0000000000001>[n_ages] N[n_i+1,n_stocks];
+      vector<lower= 0.0000000000001>[n_stocks] B[n_i+1];
+      vector[n_stocks] R[n_i+1];
+      vector[n_stocks*(n_i)] vec_B;
+      vector[n_stocks*n_i] vec_Bhat;
+      vector[n_stocks*n_i] vec_Bobs;
+      #vector[n_stocks] surv;
+      real offset;
+      real eps_phi[n_i+1-n_w,n_stocks];  
+      
+      offset <- sigma_R^2/(1-phi^2)/2;
+      eps_phi[1] <- epsilon[1];
+      for (e in 2:(n_i+1-n_w)){
+        for(j in 1:n_stocks){
+          eps_phi[e,j] <- epsilon[e,j]+phi*eps_phi[e-1,j];
+        }
+      }
+      
+      ### initial 
+      for(i in 1:n_w){  
+        for (j in 1:n_stocks){
+          B[i,j] <- B_obs[i,j];
+          N[i,j] <- BpN[i,j]*B[i,j];
+          R[i,j] <-  N[i,j,1]; 
+          vec_Bhat[i+(j-1)*n_i] <- B_hat[i,j];
+          vec_Bobs[i+(j-1)*n_i] <- B_obs[i,j];
+        }
+      }
+      for(i in (n_w+1):n_i){
+        for (j in 1:n_stocks){
+          ### number of three year olds ###
+          R[i,j] <- (fec_aa*(BpN[i-3,j]*B_hat[i-3,j]))/(alpha + beta * (fec_aa*(BpN[i-3,j]*B_hat[i-3,j])));
+          N[i,j,1] <- R[i,j]*exp(eps_phi[i-n_w+1,j]-offset)*surv[j]; 
+          
+          ### number of mature fish ###
+          for (k in 2:(n_ages-1)){
+            N[i,j,k] <- BpN[i-1,j,k-1]*B_hat[i-1,j]*surv[j];
+          }
+
+          ### terminal age class
+          N[i,j,n_ages] <- BpN[i-1,j,n_ages-1]*B_hat[i-1,j]*surv[j]+
+            BpN[i-1,j,n_ages]*B_hat[i-1,j]*surv[j];
+          ### final biomass
+          if  (w_aa*N[i,j]-H[i,j] >0)
+            B[i,j] <- w_aa*N[i,j]-H[i,j];
+          else
+            B[i,j] <- 0.0000000001;
+        }
+      }
+
+      ### log-transformed values
+      for(i in 1:n_i){  
+        for (j in 1:n_stocks){
+          vec_B[i+(j-1)*n_i] <- B[i,j];
+          vec_Bhat[i+(j-1)*n_i] <- B_hat[i,j];
+          vec_Bobs[i+(j-1)*n_i] <- B_obs[i,j];
+        }
+      }
+      
+      ### one-year ahead forecast given the model 
+      for (j in 1:n_stocks){
+        ### number of three year olds ###
+        R[n_i+1,j] <- (fec_aa*(BpN[n_i-2,j]*B_hat[n_i-2,j]))/(alpha + beta * (fec_aa*(BpN[n_i-2,j]*B_hat[n_i-2,j])));
+        N[n_i+1,j,1] <- R[n_i+1,j]*exp(eps_phi[n_i+1-n_w,j]-offset)*surv[j];     
+        for (k in 2:(n_ages-1)){
+          N[n_i+1,j,k] <- BpN[n_i,j,k-1]*B_hat[n_i,j]*surv[j];
+        }
+        N[n_i+1,j,n_ages] <- BpN[n_i,j,n_ages-1]*B_hat[n_i,j]*surv[j]+
+          BpN[n_i,j,n_ages]*B_hat[n_i,j]*surv[j];        
+        B[n_i+1,j] <- w_aa*N[n_i+1,j];
+      }
+    }
+    
+    model { 
+      for (e in 1:(n_i+1-n_w)){
+        for (j in 1:n_stocks){
+          epsilon[e,j] ~ normal(0,sigma_R);//stochastic recruitment variation
+        }
+      }
+      vec_Bhat ~ lognormal(log(vec_B),sigma_pro); // process equation
+      vec_Bobs ~ lognormal(log(vec_Bhat),sigma_obs); // observation equation
+    }'
+  stan_model(model_code=model)
 }
