@@ -96,7 +96,8 @@ fishery_simulate <- function(n_loc,stock_IDs,
                              n_stages= 10,stage_mat= 3,
                              fit.compile= NULL,
                              repetitions = 1,
-                             const_harvest=FALSE){
+                             const_harvest=FALSE,
+                             ret_ts= FALSE){
 
   n_stocks <- length(unique(stock_IDs))
   
@@ -234,18 +235,6 @@ fishery_simulate <- function(n_loc,stock_IDs,
   ### estimate beta for the BH parameters
   model_beta <- 1/mean(X[2,,n_iter-1])/(n_loc/n_stocks)
   
-  if(assessment==TRUE){
-    fit.compile <- nlss_assess(b_obs=array(B0,dim= c(n_stocks,n_iter)),
-                               b_true=array(B0,dim= c(n_stocks,n_iter)),
-                               age_freq=S_freq_s[,,1:n_iter],obs_sd=obs_sd,sd_R=site_sd,
-                               alpha_BH= a_bh,beta_BH=model_beta,harvest= H[1:n_iter,],
-                               selectivity=rep(1,length(stage_mat:n_stages)),n_stocks=n_stocks,
-                               fec_at_age=fec_at_age,weight_at_age=tons_at_age,
-                               mort=rep(M,n_stocks),stage_mat=stage_mat,
-                               n_stages=n_stages,phi=phi,n_warmup=3,
-                               compile=TRUE,optimize=point.estimate,n_iter=n_iter)
-  }
-  
   ### reset initial values as last two values of deterministic simulation 
   
   B[, 1] <- B[, n_iter-1]
@@ -258,6 +247,7 @@ fishery_simulate <- function(n_loc,stock_IDs,
   }
   ### project the population with stochastic recruitment and harvesting ###repea?
   for (i in 3:n_iter) {  
+    ptm <-proc.time()
     #surv_array[surv_array_id] <- ran_surv_prob(mean=exp(-mort),corr=surv_rho)
     surv_array[surv_array_id] <- exp(-mort)
     projection <- ssr_linear(alpha=a_bh,beta=b_bh, 
@@ -296,7 +286,6 @@ fishery_simulate <- function(n_loc,stock_IDs,
       if (assessment== TRUE){
         if(i==warmup+1){
           start <- max(1,i-20)
-          assess_iter <- (i-start+1)
           assess <- nlss_assess(b_obs=B_s[, start:i,2],b_true=B_s[, start:i,1],sd_R=site_sd,
                                 age_freq=S_freq_s[,,start:i],obs_sd=obs_sd,
                                 alpha_BH= a_bh,beta_BH=model_beta,harvest= H[start:i,],
@@ -304,7 +293,7 @@ fishery_simulate <- function(n_loc,stock_IDs,
                                 fec_at_age=fec_at_age,weight_at_age=tons_at_age,
                                 mort=rep(M,n_stocks),stage_mat=stage_mat,
                                 n_stages=n_stages,phi=phi,n_warmup=3,compile= FALSE,
-                                n_iter=assess_iter,optimize=point.estimate,compiled_model= fit.compile)
+                                optimize=point.estimate,compiled_model= fit.compile)
         } else {
           assess <- nlss_assess(b_obs=B_s[, start:i,2],b_true=B_s[, start:i,1],sd_R=site_sd,
                                 age_freq=S_freq_s[,,start:i],obs_sd=obs_sd,
@@ -313,7 +302,7 @@ fishery_simulate <- function(n_loc,stock_IDs,
                                 fec_at_age=fec_at_age,weight_at_age=tons_at_age,
                                 mort=rep(M,n_stocks),stage_mat=stage_mat,
                                 n_stages=n_stages,phi=phi,n_warmup=3,compile= FALSE,
-                                n_iter=assess_iter,optimize=FALSE,compiled_model= fit.compile,
+                                optimize=point.estimate,compiled_model= fit.compile,
                                 sd_pro = sd_process)
         }
         if(point.estimate==TRUE){
@@ -330,7 +319,7 @@ fishery_simulate <- function(n_loc,stock_IDs,
         }
         
         sd_process <- assess$sd_pro
-        cat(noquote(paste("iteration",i, "of", n_iter, "completed in", signif(proc.time()[3]-ptm[3],digits=4),"sec\n")))
+        cat(noquote(paste("iteration",i, "of", n_iter, "completed", signif(proc.time()[3]-ptm[3],digits=4),"sec\n")))
         ### forecast array 
       } else {          
         stock_surv <- lapply(stocklet_list,function(x) apply(surv_array[,,x],c(1,2),mean))
@@ -354,47 +343,53 @@ fishery_simulate <- function(n_loc,stock_IDs,
   ### generate summaries from the simulation 
   
   stock_catch =matrix(sapply(stocklet_list,function(x) rowSums(H_loc[,x])),ncol= n_stocks)
-  g_mu_catch =mean(rowSums(matrix(stock_catch[warmup2:n_iter,]),na.rm= T))
+  g_mu_catch =ifelse(n_stocks>1,mean(rowSums(matrix(stock_catch[warmup2:n_iter,]),na.rm= T)),NA)
   
   metrics_df <- data.frame(list(
     p_cv =mean(apply(B[,warmup2:n_iter],1,sd)/apply(B[,warmup2:n_iter],1,mean)),
     s_cv =mean(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),1,sd)/apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks) ,1,mean)),
-    g_cv =sd(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),2,mean))/mean(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),2,mean)),
+    g_cv =ifelse(n_stocks>1,
+                 sd(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),2,mean))/mean(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),2,mean)),
+                 NA),
     
     ### mean and equilibrium biomass
     p_mu =mean(apply(B[,warmup2:n_iter],1,mean)),
     s_mu =mean(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),1,mean))),
-    g_mu =mean(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),2,mean)),
+    g_mu =ifelse(n_stocks>1,mean(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),2,mean)),NA),
     
     s_b0 =mean(B0_loc),
     p_b0 =mean(B0),
-    g_b0 =sum(B0),
+    g_b0 =ifelse(n_stocks>1,sum(B0),NA),
     
     ### overfishing metrics
     p_of =mean(apply(B[,warmup2:n_iter],2,function(x) x<=h_crit*B0_loc)),
     s_of =mean(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),2,function(x) x<=h_crit*B0)),
-    g_of =mean(!(colMeans(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),2,function(x) x<=h_crit*B0))<1)),
+    g_of =ifelse(n_stocks>1,
+                 mean(!(colMeans(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),2,function(x) x<=h_crit*B0))<1)),
+                 NA),
     
     ### mean depletion length
     g_dep_l =dep_length(colMeans(apply(matrix(B_s[,warmup2:n_iter,1]),2,function(x) x<=h_crit*B0)!=0)),
     s_dep_l =mean(apply(apply(matrix(B_s[,warmup2:n_iter,1]),2,function(x) x<=h_crit*B0),1,dep_length),na.rm= T),
-    p_dep_l =mean(apply(apply(B[,warmup2:n_iter],2,function(x) x<=h_crit*B0_loc),1,dep_length),na.rm= T),
+    p_dep_l =ifelse(n_stocks>1,
+                    mean(apply(apply(B[,warmup2:n_iter],2,function(x) x<=h_crit*B0_loc),1,dep_length),na.rm= T),
+                    NA),
     
     ### mean annual catch 
-    g_mu_catch = g_mu_catch,
+    g_mu_catch = ifelse(n_stocks>1,g_mu_catch,NA),
     
     ### average annual variation in catch 
-    g_aav =mean(abs(diff(rowSums(H_loc[warmup2:n_iter,]))),na.rm= T)/g_mu_catch,
+    g_aav =ifelse(n_stocks>1,mean(abs(diff(rowSums(H_loc[warmup2:n_iter,]))),na.rm= T)/g_mu_catch,NA),
     s_aav =mean(apply(matrix(stock_catch[warmup2:n_iter,]),2,function(x) mean(abs(diff(x)),na.rm= T)))/(g_mu_catch/n_stocks),
     p_aav =mean(apply(H_loc[warmup2:n_iter,],2,function(x) mean(abs(diff(x)),na.rm= T)))/(g_mu_catch/n_loc),
     
     ### average variability in catch 
-    g_catch_sd =sd(rowSums(H_loc[warmup2:n_iter,]),na.rm=T)/g_mu_catch,
+    g_catch_sd =ifelse(n_stocks>1,sd(rowSums(H_loc[warmup2:n_iter,]),na.rm=T)/g_mu_catch,NA),
     s_catch_sd =mean(apply(matrix(stock_catch[warmup2:n_iter,]),2,function(x) sd(x,na.rm= T)))/(g_mu_catch/n_stocks),
     p_catch_sd =mean(apply(H_loc[warmup2:n_iter,],2,sd,na.rm= T))/(g_mu_catch/n_loc),
     
     ### autocorrelaton in biomass 
-    g_phi =pacf(colMeans(matrix(B_s[,,1],nrow= n_stocks),na.rm=T),na.action=na.pass,plot= FALSE)$acf[1],
+    g_phi =ifelse(n_stocks>1,pacf(colMeans(matrix(B_s[,,1],nrow= n_stocks),na.rm=T),na.action=na.pass,plot= FALSE)$acf[1],NA),
     s_phi =mean(apply(matrix(B_s[,,1],nrow= n_stocks),1,function(x) pacf(x,na.action=na.pass,plot= FALSE)$acf[1])),
     p_phi =mean(apply(B,1,function(x) pacf(x,na.action=na.pass,plot= FALSE)$acf[1]))
   )
@@ -403,11 +398,11 @@ fishery_simulate <- function(n_loc,stock_IDs,
   if(mean(B[,warmup2:n_iter])==0){
     b <- NA; s<- NA; g <- NA;
   } else {
-    p <- spec.pgram(t((B[,warmup2:n_iter]/rowMeans(B[,warmup2:n_iter]))[rowMeans(B[,warmup2:n_iter])>0,]),plot= FALSE)
+    p <- spec.pgram(log(t((B[,warmup2:n_iter]))),plot= FALSE)
     freq <- p$freq
     p <- rowMeans(p$spec)
-    s <- rowMeans(spec.pgram(t((matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks)/rowMeans(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks)))[rowMeans(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks))>0,]),plot= FALSE)$spec)
-    g <- spec.pgram(colMeans(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks))/mean(colMeans(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks))),plot= FALSE)$spec
+    s <- rowMeans(apply(log(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks)),1,function(x) spec.pgram(x,plot= FALSE)$spec))
+    g <-ifelse(n_stocks>1, spec.pgram(log(colMeans(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks))),plot= FALSE)$spec,NA)
   }
   spec_df <- data.frame(pop_spec=p,stock_spec=s,glob_spec= g,freq= freq)
   
@@ -416,18 +411,23 @@ fishery_simulate <- function(n_loc,stock_IDs,
   quantile_df <- data.frame(list(
     p_b =rowMeans(apply(B[,warmup2:n_iter],1,quantile, probs)),
     s_b = rowMeans(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),1,quantile, probs)),
-    g_b = quantile(colSums(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks)), probs),
+    g_b = ifelse(n_stocks>1,quantile(colSums(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks)), probs),NA),
     p_c = rowMeans(apply(H_loc,2,quantile, probs,na.rm= T)),
     s_catch = rowMeans(apply(stock_catch,2,quantile, probs,na.rm=T)),
-    g_c = quantile(rowSums(stock_catch,na.rm=T), probs,na.rm=T)
+    g_c = ifelse(n_stocks>1,quantile(rowSums(stock_catch,na.rm=T), probs,na.rm=T),NA)
     )
   )
   
   r_sigma <- sd(log(apply(X[2,,warmup2:n_iter],2,sum)))
   
   quantile_df$quants <- row.names(quantile_df)
+  if(ret_ts == TRUE){
+    TS <- list(B=B,assess= BF,B_stocks= B_s,ages= X,B0=B0, Harvest= H, forecast= BF)
+  } else {
+    TS <- NULL
+  }
  
-  return(list(metrics= metrics_df,spec= spec_df,quantiles= quantile_df,r_sigma= r_sigma))
+  return(list(metrics= metrics_df,spec= spec_df,quantiles= quantile_df,r_sigma= r_sigma, TS=TS))
   
 }
 
