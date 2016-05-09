@@ -245,11 +245,10 @@ fishery_simulate <- function(n_loc,stock_IDs,
     S_freq[,,i]  <- S_freq[,,n_iter-2+i]
     S_freq_s[,,i]  <- S_freq_s[,,n_iter-2+i]
   }
-  ### project the population with stochastic recruitment and harvesting ###repea?
+  ### project the population with stochastic recruitment and harvesting ###
   for (i in 3:n_iter) {  
     ptm <-proc.time()
-    #surv_array[surv_array_id] <- ran_surv_prob(mean=exp(-mort),corr=surv_rho)
-    surv_array[surv_array_id] <- exp(-mort)
+    surv_array[surv_array_id] <- ran_surv_prob(mean=exp(-mort),corr=surv_rho)
     projection <- ssr_linear(alpha=a_bh,beta=b_bh, 
                              fec_at_age = fec_at_age, 
                              n_loc = n_loc,
