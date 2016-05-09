@@ -3,8 +3,8 @@
 ** inst
 ** preparing package for lazy loading
 ** help
-Warning: /Users/Dan/Copy/Post-Doc/Rmetapop/Rmetapop.Rcheck/00_pkg_src/Rmetapop/man/Rmetapop-package.Rd:32: All text must be in a section
-Warning: /Users/Dan/Copy/Post-Doc/Rmetapop/Rmetapop.Rcheck/00_pkg_src/Rmetapop/man/Rmetapop-package.Rd:33: All text must be in a section
+Warning: /home/okamoto/Rmetapop/Rmetapop.Rcheck/00_pkg_src/Rmetapop/man/Rmetapop-package.Rd:32: All text must be in a section
+Warning: /home/okamoto/Rmetapop/Rmetapop.Rcheck/00_pkg_src/Rmetapop/man/Rmetapop-package.Rd:33: All text must be in a section
 *** installing help indices
 ** building package indices
 ** testing if installed package can be loaded

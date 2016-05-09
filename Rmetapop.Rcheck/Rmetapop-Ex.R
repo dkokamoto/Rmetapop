@@ -1,6 +1,18 @@
 pkgname <- "Rmetapop"
 source(file.path(R.home("share"), "R", "examples-header.R"))
 options(warn = 1)
+base::assign(".ExTimings", "Rmetapop-Ex.timings", pos = 'CheckExEnv')
+base::cat("name\tuser\tsystem\telapsed\n", file=base::get(".ExTimings", pos = 'CheckExEnv'))
+base::assign(".format_ptime",
+function(x) {
+  if(!is.na(x[4L])) x[1L] <- x[1L] + x[4L]
+  if(!is.na(x[5L])) x[2L] <- x[2L] + x[5L]
+  options(OutDec = '.')
+  format(x[1L:3L], digits = 7L)
+},
+pos = 'CheckExEnv')
+
+### * </HEADER>
 library('Rmetapop')
 
 base::assign(".oldSearch", base::search(), pos = 'CheckExEnv')
@@ -10,6 +22,7 @@ nameEx("BH")
 
 flush(stderr()); flush(stdout())
 
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
 ### Name: BH
 ### Title: Beverton-Holt stock recruit relationship.
 ### Aliases: BH
@@ -47,12 +60,15 @@ ggplot(aes(Eggs,Recruits),data= df1)+
 
 
 
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("BH", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
 cleanEx()
 nameEx("Rmetapop-package")
 ### * Rmetapop-package
 
 flush(stderr()); flush(stdout())
 
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
 ### Name: Rmetapop-package
 ### Title: What the package does (short line) ~~ package title ~~
 ### Aliases: Rmetapop-package Rmetapop
@@ -64,12 +80,15 @@ flush(stderr()); flush(stdout())
 
 
 
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("Rmetapop-package", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
 cleanEx()
 nameEx("fishery_simulate")
 ### * fishery_simulate
 
 flush(stderr()); flush(stdout())
 
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
 ### Name: fishery_simulate
 ### Title: A wrapper to simulate a linear stage structued model with a
 ###   stock assessment and harvest
@@ -302,6 +321,8 @@ pacf(I(fit1[[2]]$assessment[3,,72,1]-fit1[[1]]$B_stocks[3,,1])[1:72], main = "Hi
 
 
 
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("fishery_simulate", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
 graphics::par(get("par.postscript", pos = 'CheckExEnv'))
 cleanEx()
 nameEx("ran_stray_prob")
@@ -309,6 +330,7 @@ nameEx("ran_stray_prob")
 
 flush(stderr()); flush(stdout())
 
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
 ### Name: ran_stray_prob
 ### Title: Generate a series of random stray matrices using a mean stray
 ###   probability matrix
@@ -340,12 +362,15 @@ ggplot(aes(site2,stray_probability),data =df4)+
 
 
 
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("ran_stray_prob", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
 cleanEx()
 nameEx("ran_surv_prob")
 ### * ran_surv_prob
 
 flush(stderr()); flush(stdout())
 
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
 ### Name: ran_surv_prob
 ### Title: Generate a series of correlated, random survival matrices
 ### Aliases: ran_surv_prob
@@ -376,12 +401,15 @@ ggplot(aes(site2,stray_probability),data =df4)+
 
 
 
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("ran_surv_prob", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
 cleanEx()
 nameEx("spat_cor_mat")
 ### * spat_cor_mat
 
 flush(stderr()); flush(stdout())
 
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
 ### Name: spat_cor_mat
 ### Title: Generate a spatially correlated matrix
 ### Aliases: spat_cor_mat
@@ -416,12 +444,15 @@ ggplot(aes(site2,correlation),data =df1)+
 
 
 
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("spat_cor_mat", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
 cleanEx()
 nameEx("spat_temp_ts")
 ### * spat_temp_ts
 
 flush(stderr()); flush(stdout())
 
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
 ### Name: spat_temp_ts
 ### Title: Generate a spatially and temporally correlated time series
 ### Aliases: spat_temp_ts
@@ -448,12 +479,15 @@ matplot(errors$ts,type= "l")
 
 
 
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("spat_temp_ts", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
 cleanEx()
 nameEx("ssr_linear")
 ### * ssr_linear
 
 flush(stderr()); flush(stdout())
 
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
 ### Name: ssr_linear
 ### Title: Discrete survival, straying, and recruitment projection.
 ### Aliases: ssr_linear
@@ -635,12 +669,15 @@ levelplot(cor(t(B[,1:(n_iter-1)])))
 
 
 
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("ssr_linear", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
 cleanEx()
 nameEx("ssr_linear_ode")
 ### * ssr_linear_ode
 
 flush(stderr()); flush(stdout())
 
+base::assign(".ptime", proc.time(), pos = "CheckExEnv")
 ### Name: ssr_linear_ode
 ### Title: Continuous time survival, straying, and harvest with discrete
 ###   recruitment
@@ -830,6 +867,8 @@ levelplot(cor(t(B[, 1:n_iter, 1])))
 
 
 
+base::assign(".dptime", (proc.time() - get(".ptime", pos = "CheckExEnv")), pos = "CheckExEnv")
+base::cat("ssr_linear_ode", base::get(".format_ptime", pos = 'CheckExEnv')(get(".dptime", pos = "CheckExEnv")), "\n", file=base::get(".ExTimings", pos = 'CheckExEnv'), append=TRUE, sep="\t")
 ### * <FOOTER>
 ###
 options(digits = 7L)

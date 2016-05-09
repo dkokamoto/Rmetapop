@@ -1,7 +1,7 @@
 
-R version 3.2.1 (2015-06-18) -- "World-Famous Astronaut"
-Copyright (C) 2015 The R Foundation for Statistical Computing
-Platform: x86_64-apple-darwin13.4.0 (64-bit)
+R version 3.2.5 (2016-04-14) -- "Very, Very Secure Dishes"
+Copyright (C) 2016 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu (64-bit)
 
 R is free software and comes with ABSOLUTELY NO WARRANTY.
 You are welcome to redistribute it under certain conditions.
@@ -20,6 +20,18 @@ Type 'q()' to quit R.
 > pkgname <- "Rmetapop"
 > source(file.path(R.home("share"), "R", "examples-header.R"))
 > options(warn = 1)
+> base::assign(".ExTimings", "Rmetapop-Ex.timings", pos = 'CheckExEnv')
+> base::cat("name\tuser\tsystem\telapsed\n", file=base::get(".ExTimings", pos = 'CheckExEnv'))
+> base::assign(".format_ptime",
++ function(x) {
++   if(!is.na(x[4L])) x[1L] <- x[1L] + x[4L]
++   if(!is.na(x[5L])) x[2L] <- x[2L] + x[5L]
++   options(OutDec = '.')
++   format(x[1L:3L], digits = 7L)
++ },
++ pos = 'CheckExEnv')
+> 
+> ### * </HEADER>
 > library('Rmetapop')
 Loading required package: deSolve
 
@@ -47,8 +59,7 @@ Loading required package: slam
 Loading required package: scales
 Loading required package: coda
 Loading required package: rstan
-Loading required package: Rcpp
-rstan (Version 2.8.0, packaged: 2015-09-19 14:48:38 UTC, GitRev: 05c3d0058b6a)
+rstan (Version 2.9.0, packaged: 2016-01-05 16:17:47 UTC, GitRev: 05c3d0058b6a)
 For execution on a local, multicore CPU with excess RAM we recommend calling
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
@@ -82,6 +93,7 @@ Loading required package: MASS
 > 
 > flush(stderr()); flush(stdout())
 > 
+> base::assign(".ptime", proc.time(), pos = "CheckExEnv")
 > ### Name: BH
 > ### Title: Beverton-Holt stock recruit relationship.
 > ### Aliases: BH
@@ -115,23 +127,5 @@ Loading required package: MASS
 +   geom_text(x= E0/1e12*.7,y= 1/beta/1e6*.2,label= "h (steepness)= blue/(red+blue)",data= df1[1,])+
 +   scale_x_continuous(limits=c(0,E0/1e12*1.02),expand= c(0,0))+
 +   scale_y_continuous(limits=c(0,1/beta/1e6*1.02),expand= c(0,0))
-> 
-> 
-> 
-> 
-> cleanEx()
-> nameEx("Rmetapop-package")
-> ### * Rmetapop-package
-> 
-> flush(stderr()); flush(stdout())
-> 
-> ### Name: Rmetapop-package
-> ### Title: What the package does (short line) ~~ package title ~~
-> ### Aliases: Rmetapop-package Rmetapop
-> ### Keywords: package
-> 
-> ### ** Examples
-> 
-> ~~ simple examples of the most important functions ~~
-Error: unexpected symbol in "~~ simple examples"
+Error: Unknown parameters: yintercept
 Execution halted
