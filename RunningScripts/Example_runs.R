@@ -11,7 +11,7 @@ sapply(plist, FUN = function(X) {
 E0_assess <-  59463*1e6*200  ### eggs at equilibrium
 R0_assess <- 500*1e6  ### modified from table E7`
 h_assess <- 0.8  ### steepness
-M_assess <- 0.7  ### natural mortality
+M_assess <- 0.5  ### natural mortality
 stage_mat <- 3  ### stage at maturity
 a_bh_assess <- E0_assess  * (1 - h_assess)/(4 * h_assess  * R0_assess )
 b_bh_assess <- (5 * h_assess - 1)/(4 * h_assess  * R0_assess)
@@ -73,7 +73,7 @@ param.list <- rows.to.list(param.df)
 ### compile the model 
 fit.compile <- nlss_compile()
 
-num = 983
+num = 950
 ### extract parameter of interest
   x <- param.df[num,]
   
@@ -101,6 +101,7 @@ num = 983
                                       Fmort=x$Fmort,                ### proportional fishing rate
                                       fit.compile=fit.compile,      ### compiled assessment model
                                       ret_ts= TRUE))
+  
 #system.time(fit_MM <- mclapply(param.list,parallel.sim,mc.cores= 8))
 #save(fit_MM,param.df,file= "fit_4.27.16.Rdata")
 

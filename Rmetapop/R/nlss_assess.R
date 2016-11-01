@@ -38,33 +38,53 @@ nlss_assess <- function(b_obs,b_true,age_freq,obs_sd,alpha_BH,sd_R,
                        init_states= NULL,sd_pro= NULL){
   
   ### dimensions of the observed biomass array
-  n_iter <- dim(t(b_obs))[1]
+  if(n_stocks>1){
+    n_iter <- dim(t(b_obs))[1]
+    B_obs <- t(b_obs)
+    H <- harvest
+    surv <- exp(-mort)
+    
+  } else {
+    n_iter <- length(b_obs)
+    B_obs <- matrix(b_obs,ncol=1)
+    H <- matrix(harvest,ncol=1)
+    surv <- array(exp(-mort))
+  }
+  
+  ### biomass per number 
+  if(n_stocks>1){
+    BpN <- aperm(apply(age_freq,c(2,3),function(x) 
+            (1/x%*%((weight_at_age)))*x), c(3,2,1))
+  } else {
+    BpN <- aperm(array(apply(age_freq,c(2),function(x) 
+      (1/x%*%((weight_at_age)))*x),dim=c(8,1,n_iter)),c(3,2,1))
+  }
   
   ### generate a list of data for the assessment
-  model_data <- list(B_obs= t(b_obs),
+  model_data <- list(B_obs= B_obs,
              sigma_obs=obs_sd,
              beta=beta_BH,
              fec_aa=fec_at_age,
              w_aa=weight_at_age,
-             BpN=aperm(apply(age_freq,c(2,3),function(x) 
-               (1/x%*%((weight_at_age)))*x), c(3,2,1)),
-             surv=exp(-mort),
+             BpN=BpN,
+             surv=surv,
              sigma_R=sd_R,
              n_ages = length(stage_mat:n_stages),
              n_i= n_iter,
              n_stocks= n_stocks,
-             H=harvest,
+             H=H,
              S=selectivity,
              n_w = 3)
 
   ### list of parameters to save ###
-  params<- c("sigma_pro","B_hat","B")
+  params<- c("sigma_pro","B_hat","B","alpha")
   
   ### initial values ###
   inits <- function(){list(
     B_hat=  rbind(init_states,init_states[nrow(init_states),]), 
     sigma_pro = 0.4,
-    epsilon = matrix(rep(0,(n_iter+1-3)*n_stocks),ncol= n_stocks))}
+    epsilon = matrix(rep(0,(n_iter+1-3)*n_stocks),ncol= n_stocks),
+    alpha =1000 )}
   
   
   ### MCMC details
@@ -180,6 +200,7 @@ model <- '
         vec_Bobs ~ lognormal(log(vec_Bhat),sigma_obs); // observation equation
   }
 '
+
 if(optimize==TRUE){
   if(compile==TRUE){
     opt_model<-stan_model(model_code=model)

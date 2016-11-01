@@ -241,14 +241,17 @@ fishery_simulate <- function(n_loc,stock_IDs,
   B[, 2] <- B[, n_iter]
   B_s[, 1,] <- B_s[, n_iter-1,]
   B_s[, 2,] <- B_s[, n_iter,]
+  X[, , 1] <- X[,,n_iter-1]
+  X[, , 2] <- X[,,n_iter]
   for (i in 1:2){
     S_freq[,,i]  <- S_freq[,,n_iter-2+i]
     S_freq_s[,,i]  <- S_freq_s[,,n_iter-2+i]
   }
-  ### project the population with stochastic recruitment and harvesting ###
+  ### project the population with stochastic recruitment and harvesting ###repea?
   for (i in 3:n_iter) {  
     ptm <-proc.time()
-    surv_array[surv_array_id] <- ran_surv_prob(mean=exp(-mort),corr=surv_rho)
+    #surv_array[surv_array_id] <- ran_surv_prob(mean=exp(-mort),corr=surv_rho)
+    surv_array[surv_array_id] <- exp(-mort)
     projection <- ssr_linear(alpha=a_bh,beta=b_bh, 
                              fec_at_age = fec_at_age, 
                              n_loc = n_loc,
@@ -343,6 +346,7 @@ fishery_simulate <- function(n_loc,stock_IDs,
   
   stock_catch =matrix(sapply(stocklet_list,function(x) rowSums(H_loc[,x])),ncol= n_stocks)
   g_mu_catch =ifelse(n_stocks>1,mean(rowSums(matrix(stock_catch[warmup2:n_iter,]),na.rm= T)),NA)
+  s_mu_catch = mean(stock_catch[warmup2:n_iter,])
   
   metrics_df <- data.frame(list(
     p_cv =mean(apply(B[,warmup2:n_iter],1,sd)/apply(B[,warmup2:n_iter],1,mean)),
@@ -376,21 +380,25 @@ fishery_simulate <- function(n_loc,stock_IDs,
     
     ### mean annual catch 
     g_mu_catch = ifelse(n_stocks>1,g_mu_catch,NA),
-    
+    s_mu_catch = s_mu_catch,
+
     ### average annual variation in catch 
     g_aav =ifelse(n_stocks>1,mean(abs(diff(rowSums(H_loc[warmup2:n_iter,]))),na.rm= T)/g_mu_catch,NA),
-    s_aav =mean(apply(matrix(stock_catch[warmup2:n_iter,]),2,function(x) mean(abs(diff(x)),na.rm= T)))/(g_mu_catch/n_stocks),
-    p_aav =mean(apply(H_loc[warmup2:n_iter,],2,function(x) mean(abs(diff(x)),na.rm= T)))/(g_mu_catch/n_loc),
+    s_aav =mean(apply(matrix(stock_catch[warmup2:n_iter,]),2,function(x) sd(diff(x),na.rm= T)))/(s_mu_catch),
+    p_aav =mean(apply(H_loc[warmup2:n_iter,],2,function(x) sd(diff(x),na.rm= T)))/(s_mu_catch/n_loc),
     
     ### average variability in catch 
     g_catch_sd =ifelse(n_stocks>1,sd(rowSums(H_loc[warmup2:n_iter,]),na.rm=T)/g_mu_catch,NA),
-    s_catch_sd =mean(apply(matrix(stock_catch[warmup2:n_iter,]),2,function(x) sd(x,na.rm= T)))/(g_mu_catch/n_stocks),
-    p_catch_sd =mean(apply(H_loc[warmup2:n_iter,],2,sd,na.rm= T))/(g_mu_catch/n_loc),
+    s_catch_sd =mean(apply(matrix(stock_catch[warmup2:n_iter,]),2,function(x) sd(x,na.rm= T)))/(s_mu_catch),
+    p_catch_sd =mean(apply(H_loc[warmup2:n_iter,],2,sd,na.rm= T))/(s_mu_catch/n_loc),
     
     ### autocorrelaton in biomass 
     g_phi =ifelse(n_stocks>1,pacf(colMeans(matrix(B_s[,,1],nrow= n_stocks),na.rm=T),na.action=na.pass,plot= FALSE)$acf[1],NA),
     s_phi =mean(apply(matrix(B_s[,,1],nrow= n_stocks),1,function(x) pacf(x,na.action=na.pass,plot= FALSE)$acf[1])),
-    p_phi =mean(apply(B,1,function(x) pacf(x,na.action=na.pass,plot= FALSE)$acf[1]))
+    p_phi =mean(apply(B,1,function(x) pacf(x,na.action=na.pass,plot= FALSE)$acf[1])),
+    
+    ### spatial variance 
+    spat_cv =mean(apply(B[,warmup2:n_iter],2,function(x) sd(x)/mean(x)))
   )
   
   ### spectral density at different frequencies in biomass
