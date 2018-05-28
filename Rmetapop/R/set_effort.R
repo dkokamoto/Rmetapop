@@ -13,7 +13,7 @@ fish_time <- function (time, state, pars, N) {
     dHarvest <- Effort * Fish * qt
     
     ## flux 
-    FluxEffort    <- De * rowSums(Effort * outer(Fish*qt,Fish*qt))
+    FluxEffort    <-  Effort*De *rowSums(outer(Fish,Fish,"-"))
     
     ## Add flux gradient to rate of change
     dEffort       <- dEffort + FluxEffort
@@ -24,10 +24,10 @@ fish_time <- function (time, state, pars, N) {
 
 
 N  <- 10
-max_time <- 2
+max_time <- 10
 n_times <- 100
 
-set_effort <- function(quota, biomass,catchability=0.005,diffusion= 100000,N=10,n_times= 10,max_time=10){
+set_effort <- function(quota, biomass,catchability=0.05,diffusion= 10000000000,N=10,n_times= 100,max_time=2){
     
     ## ===================
     ## Apply the model 
@@ -41,13 +41,15 @@ set_effort <- function(quota, biomass,catchability=0.005,diffusion= 100000,N=10,
     yini_array[,3] <-0
     yini <- as.vector(yini_array)
     
-    ## solve model (5000 state variables...  use Cash-Karp Runge-Kutta method
+    ## solve model (use Cash-Karp Runge-Kutta method
     times   <- seq(from=0, to=max_time, length.out= n_times)
     
     solution <- ode.1D(y = yini, times = times, func = fish_time, parms = pars,
                    dimens = N, names = c("Fish", "Effort","Harvest"),
-                   N = N, method = rkMethod("rk45ck"))
-
+                   N = N, method = rkMethod("rk4"))
+    a <- melt(solution[,12:21])
+    ggplot(aes(Var1,value),data= a)+geom_line(aes(colour= factor(Var2)))
+    
     return(list(Harvest= solution[n_times,(2*N+2):(3*N+1)]*scalar, CPUE = solution[n_times,(2*N+2):(3*N+1)]/solution[n_times,(N+2):(2*N+1)]))
 }
 
