@@ -4,20 +4,28 @@
 \alias{fishery_simulate}
 \title{A wrapper to simulate a linear stage structued model with a stock assessment and harvest}
 \usage{
-fishery_simulate(n_loc, stock_IDs, a_bh, b_bh, phi, spat_scale, spat_sd,
-  site_sd, C, obs_sd, M = 0.47, n_iter = 53, warmup = 10, warmup2 = 13,
-  spat_alloc = 1, surv_rho = 0.05, cor_mat = NULL,
-  collective_dd = FALSE, h_crit = 0.25, Fmort = 0.2, assessment = FALSE,
-  point.estimate = FALSE, n_stages = 10, stage_mat = 3,
-  fit.compile = NULL, repetitions = 1, const_harvest = FALSE,
-  ret_ts = FALSE)
+fishery_simulate(n_loc, stock_IDs, harvest_IDs, a_bh, b_bh, phi, spat_scale,
+  juv_spat_scale, spat_sd, site_sd, C, obs_sd, M = 0.47, n_iter = 53,
+  warmup = 10, warmup2 = 13, spat_alloc = 1, surv_rho = 0.05,
+  cor_mat = NULL, collective_dd = FALSE, h_crit = 0.25, of_crit = 0.2,
+  Fmort = 0.2, assessment = FALSE, point.estimate = FALSE,
+  stage_forecast = 2, n_stages = 10, stage_mat = 2, maturity = c(0.1,
+  0.9, rep(1, 7)), fit.compile = NULL, repetitions = 1,
+  const_harvest = FALSE, ret_ts = FALSE, follow = NULL, dd_IDs = NULL,
+  quota_adj = FALSE, ns_samps = 200, nf_samps = 200)
 }
 \arguments{
-\item{n_loc}{number of locations at which a stock assessment is implemented}
+\item{n_loc}{number of locations (populations) simulated}
+
+\item{stock_IDs}{vector of integers identifying which populations belong to which stock}
+
+\item{harvest_IDs}{vector of integers identifying which populations are harvested within a stock (NA iS not harvested)}
 
 \item{phi}{first order recruitment autocorrelation}
 
 \item{spat_scale}{spatial scale of stray connectivity}
+
+\item{juv_spat_scale}{spatial scale of juvenile stray connectivity}
 
 \item{spat_sd}{gaussian spatial correlation parameter}
 
@@ -38,6 +46,8 @@ fishery_simulate(n_loc, stock_IDs, a_bh, b_bh, phi, spat_scale, spat_sd,
 \item{n_stages}{number of stages including eggs and recruits}
 
 \item{stage_mat}{stage # that indicates maturity}
+
+\item{follow}{do young fish follow older fish NULL or TRUE}
 
 \item{alpha}{BH stock-recruit parameter}
 
@@ -270,4 +280,3 @@ pacf(I(fit1[[2]]$assessment[3,,72,1]-fit1[[1]]$B_stocks[3,,1])[1:72], main = "Hi
 
 
 }
-

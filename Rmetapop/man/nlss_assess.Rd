@@ -13,4 +13,3 @@ nlss_assess(b_obs, b_true, age_freq, obs_sd, alpha_BH, sd_R, beta_BH,
 \description{
 Nonlinear state-space model stock assessment.
 }
-

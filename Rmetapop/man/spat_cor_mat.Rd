@@ -4,7 +4,8 @@
 \alias{spat_cor_mat}
 \title{Generate a spatially correlated matrix}
 \usage{
-spat_cor_mat(n_loc, spat_sd = 1, spat_scale = NULL, sumto1 = FALSE)
+spat_cor_mat(n_loc, spat_sd = 1, spat_scale = NULL, sumto1 = FALSE,
+  distance = NULL, offset = 0.1, circular = TRUE)
 }
 \arguments{
 \item{n_loc}{number of locatons.}
@@ -45,4 +46,3 @@ ggplot(aes(site2,correlation),data =df1)+
   xlab("site")+
   facet_wrap(~parameter)+theme_bw()
 }
-

@@ -5,7 +5,7 @@
 \title{Generate a spatially and temporally correlated time series}
 \usage{
 spat_temp_ts(n_iter, n_loc, site_sd, spat_sd, phi, cor_mat = NULL,
-  log = TRUE)
+  log = TRUE, offset = 0.1, circular = TRUE)
 }
 \arguments{
 \item{n_iter}{number of observations in the multivariate time series.}
@@ -55,4 +55,3 @@ matplot(errors$ts,type= "l")
 \seealso{
 \code{\link{spat_cor_mat}}
 }
-

@@ -9,4 +9,3 @@ LVB(age, L_inf = 27, k = 0.48, t0 = 0)
 \description{
 Ludwig Von-Bertalanfy growth equation.
 }
-

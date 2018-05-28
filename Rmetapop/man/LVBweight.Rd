@@ -9,4 +9,3 @@ LVBweight(age)
 \description{
 Weight at age using the LVB growth equation and length-weight relationship.
 }
-

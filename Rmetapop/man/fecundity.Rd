@@ -2,11 +2,10 @@
 % Please edit documentation in R/ancillary.R
 \name{fecundity}
 \alias{fecundity}
-\title{Fecundity at length function.}
+\title{Fecundity at weight function with base parameters from Tanasichuk et al. (1993)}
 \usage{
-fecundity(L, F1 = 0.000419, F2 = 3.372)
+fecundity(w, F1 = exp(4.69), F2 = 1.13)
 }
 \description{
-Fecundity at length function.
+Fecundity at weight function with base parameters from Tanasichuk et al. (1993)
 }
-

@@ -219,4 +219,3 @@ levelplot(cor(t(B[, 1:n_iter, 1])))
 
 
 }
-

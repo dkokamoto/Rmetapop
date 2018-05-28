@@ -9,4 +9,3 @@ fecundity_age(age)
 \description{
 Fecundity at age using LVB growth equation and fecundity at length function
 }
-

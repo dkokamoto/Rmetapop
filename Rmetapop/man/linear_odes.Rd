@@ -9,4 +9,3 @@ linear_odes(t, state, A)
 \description{
 Define a system of ordinary differential equations from a matrix
 }
-

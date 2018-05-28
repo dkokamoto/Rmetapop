@@ -57,4 +57,3 @@ ggplot(aes(Eggs,Recruits),data= df1)+
   scale_y_continuous(limits=c(0,1/beta/1e6*1.02),expand= c(0,0))
 
 }
-

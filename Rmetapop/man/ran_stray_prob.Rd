@@ -39,4 +39,3 @@ ggplot(aes(site2,stray_probability),data =df4)+
   xlab("destination site")+
   facet_grid(precision~replicate)+theme_bw()
 }
-

@@ -4,7 +4,7 @@
 \alias{ran_surv_prob}
 \title{Generate a series of correlated, random survival matrices}
 \usage{
-ran_surv_prob(mean, corr, N = 10000)
+ran_surv_prob(mean, corr, N = 10000, reps = 1)
 }
 \arguments{
 \item{mean}{mean survival rate}
@@ -39,4 +39,3 @@ ggplot(aes(site2,stray_probability),data =df4)+
   xlab("destination site")+
   facet_grid(precision~replicate)+theme_bw()
 }
-

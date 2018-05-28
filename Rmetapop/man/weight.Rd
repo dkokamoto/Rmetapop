@@ -2,11 +2,10 @@
 % Please edit documentation in R/ancillary.R
 \name{weight}
 \alias{weight}
-\title{Power length-weight relationship.}
+\title{Power length-weight relationship (from Martell et al. 2012)}
 \usage{
 weight(length, a = 4.5e-06, b = 3.127)
 }
 \description{
-Power length-weight relationship.
+Power length-weight relationship (from Martell et al. 2012)
 }
-

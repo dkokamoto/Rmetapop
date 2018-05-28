@@ -10,4 +10,3 @@ kalman_assess(TS, obs_sd, sys_sd, fit = FALSE, full.ts = FALSE,
 \description{
 Apply a Kalman filter to a time series using a linear DLM
 }
-
