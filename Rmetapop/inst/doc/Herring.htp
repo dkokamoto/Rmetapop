@@ -1,0 +1,118 @@
+#if !defined(_Herring_)
+#  define _Herring_
+
+class model_data : public ad_comm{
+  data_int Npop;
+  data_int MaxAge;
+  int InitYr;
+  data_int Nyear;
+  data_int Nproj;
+  data_int Nfleet;
+  data_int SRType;
+  data_int PhaseDiffusionA;
+  data_int PhaseDiffusionJ;
+  data_int PhaseSigmaR;
+  data_int LastRecDev;
+  data_4array CatchInput;
+  data_3array Index;
+  data_3array SpawnAge;
+  data_4array FishAgeData;
+  data_number M;
+  data_vector Mat;
+  dvector MatProp;
+  data_vector Wght;
+  data_vector Fec;
+  data_matrix S;
+  data_number InitNStart;
+  int TheYear;
+  int PhaseAlpha;
+  data_int TestCodeDat;
+  ~model_data();
+  model_data(int argc,char * argv[]);
+  friend class model_parameters;
+};
+
+class model_parameters : public model_data ,
+  public function_minimizer
+{
+public:
+  ~model_parameters();
+  void preliminary_calculations(void);
+  void set_runtime(void);
+  virtual void * mycast(void) {return (void*)this;}
+  static int mc_phase(void)
+  {
+    return initial_params::mc_phase;
+  }
+  static int mceval_phase(void)
+  {
+    return initial_params::mceval_phase;
+  }
+  static int sd_phase(void)
+  {
+    return initial_params::sd_phase;
+  }
+  static int current_phase(void)
+  {
+    return initial_params::current_phase;
+  }
+  static int last_phase(void)
+  {
+    return (initial_params::current_phase
+      >=initial_params::max_number_phases);
+  }
+  static prevariable current_feval(void)
+  {
+    return *objective_function_value::pobjfun;
+  }
+private:
+  ivector integer_control_flags;
+  dvector double_control_flags;
+  param_init_number Dummy;
+  param_init_vector LogRbar;
+  param_init_number SigmaJ;
+  param_init_number SigmaA;
+  param_init_vector Alpha;
+  param_init_bounded_number SigmaR;
+  param_init_matrix Rec_dev;
+  param_vector Beta;
+  param_4array N;
+  param_4array N_check;
+  param_3array N1;
+  param_3array N2;
+  param_3array N3;
+  param_matrix SSB;
+  param_matrix SSBP;
+  param_matrix Eggs;
+  param_3array F;
+  param_3array SSBAGE;
+  param_4array CAgePred;
+  param_matrix Dist;
+  param_matrix DiffuseA;
+  param_matrix DiffuseJ;
+  param_vector LikeIndex;
+  param_vector LikeSSBAge;
+  param_matrix LikeFishAge;
+  param_number Rec_Penal;
+  param_number Catch_Penal;
+  param_number Fproj;
+  param_matrix Quota;
+  param_stddev_matrix SSBO;
+  param_number prior_function_value;
+  param_number likelihood_function_value;
+  objective_function_value Obj;
+public:
+  virtual void userfunction(void);
+  virtual void report(const dvector& gradients);
+  virtual void final_calcs(void);
+  model_parameters(int sz,int argc, char * argv[]);
+  virtual void initializationfunction(void){}
+  void SetParameters(void);
+  void InitialState(void);
+  void ProjectOneYear(void);
+  void Project(void);
+  void LikeLihood(void);
+  void OutputStuff(void);
+
+};
+#endif
