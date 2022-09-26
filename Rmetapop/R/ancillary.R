@@ -1,4 +1,4 @@
-
+#' Helper function 
 rows.to.list <- function( df ) {
   ll<-apply(df,1,list)
   ll<- lapply(ll,function(x) as.data.frame(t(unlist(x))))
@@ -110,6 +110,7 @@ linear_odes <- function(t, state, A) {
 #' @param warmup  number of warmup iterations prior to starting a fishery  
 #' @param M natural mortality (either a vector, matrix, or single value)
 #' @param point.estimate logical for whether to estimate a point estimate or a fully Bayesian posterior
+#' @param stage_forecast the first stage to be forecast
 #' @param obs_sd observation standard deviation 
 #' @param spat_scale spatial scale of stray connectivity
 #' @param juv_spat_scale spatial scale of juvenile stray connectivity
@@ -121,6 +122,7 @@ linear_odes <- function(t, state, A) {
 #' @param spat_sd gaussian spatial correlation parameter
 #' @param site_sd overall log-scale recruitment standard deviation 
 #' @param follow do young fish follow older fish NULL or TRUE
+#' @param DD_ids vector of stocklets that compete with one-another in stock recruitment in a pool
 #' @example /inst/examples/assessment_example.R
 
 fishery_simulate <- function(n_loc,
@@ -155,10 +157,7 @@ fishery_simulate <- function(n_loc,
                              const_harvest=FALSE,
                              ret_ts= FALSE,
                              follow= NULL,
-                             dd_IDs=NULL,
-                             quota_adj= FALSE,
-                             ns_samps=200,
-                             nf_samps=200){
+                             dd_IDs=NULL){
   
   n_stocks <- length(unique(stock_IDs[!is.na(stock_IDs)]))
   
@@ -197,7 +196,7 @@ fishery_simulate <- function(n_loc,
   # matrix of mean stray probabilities, controled by a Cauchy distribution with scale spat_scale
   stray_probs <- spat_cor_mat(n_loc, spat_scale = spat_scale, sumto1 = TRUE,offset= 0)
   juv_stray_probs <- spat_cor_mat(n_loc, spat_scale = juv_spat_scale, sumto1 = TRUE,offset= 0)
-  
+
   #round(stray_probs,2)# columns are probability of coming from, and row is probability going to (i.e. column 2 row 1 is going from location 2 to location 1)
   #colSums(stray_probs) # check to make sure it sums to 1
   
@@ -277,8 +276,6 @@ fishery_simulate <- function(n_loc,
   H_loc <- array(NA, dim = c(n_iter+1,n_loc), dimnames = list(1:(n_iter+1),d2))
   EH_loc <- array(NA, dim = c(n_iter+1,n_loc), dimnames = list(1:(n_iter+1),d2))
   
-  red <- rep(NA,n_iter+1)
-  
   for (i in 1:n_iter){
     H[i,]  <- 0
     H_loc[i,] <- 0
@@ -348,7 +345,7 @@ fishery_simulate <- function(n_loc,
   for (i in 1:2){
     S_freq[,,i]  <- S_freq[,,n_iter-2+i]
     S_freq_s[,,i,1]  <- S_freq_s[,,n_iter-2+i,1]
-    
+
   }
   
   ### create sampling dataframes ###
@@ -403,10 +400,10 @@ fishery_simulate <- function(n_loc,
     EH_loc[i,] <- projection$eggs_harvest
     
     ### record total spawning biomass 
-    B[, i,1] <- (tons_at_age %*% projection$mat)
-    B[, i,2] <- B[, i,1]*exp(rnorm(n_stocks, 0, obs_sd) - 0.5 * obs_sd^2)
+    B[, i,1] <- (tons_at_age) %*% projection$mat
+    B[, i,2] <- (tons_at_age) %*% projection$mat* exp(rnorm(n_stocks, 0, obs_sd) - 0.5 * obs_sd^2)
     B_s[, i,1] <- sapply(stocklet_list,function(x) sum(B[x,i,1]))
-    B_s[, i,2] <- sapply(stocklet_list,function(x) sum(B[x,i,2]))
+    B_s[, i,2] <- rlnorm(n_stocks, log(B_s[, i,1]), obs_sd)
     
     ### spawning age frequency ###
     SN <- mapply(function(x) rowSums(projection$mat[,stock_IDs==x]),1:n_stocks)
@@ -517,24 +514,24 @@ fishery_simulate <- function(n_loc,
           BF[j, i+1, i,2]<-(((tons_at_age*maturity)[(stage_forecast:n_stages)-1])%*%
                               sapply(stocklet_list,function(x) 
                                 rowSums(ssr_linear(alpha=a_bh,beta=b_bh, fec_at_age = fec_at_age, 
-                                                   n_loc = n_loc, 
-                                                   n_stages = n_stages,
-                                                   harvest=rep(0,n_stocks),
-                                                   tons_at_age=tons_at_age,
-                                                   maturity= maturity,
-                                                   stage_maturity = stage_mat,
-                                                   surv_array = surv_array,              
-                                                   group_dd= group_dd,
-                                                   harvest_list=harvest_list,
-                                                   spat_alloc= spat_alloc,
-                                                   s_ID=stock_IDs,N_s=n_stocks,
-                                                   eggs = X[1, , i - 1], 
-                                                   X0 = X[2:n_stages, , i],
-                                                   stray_mat = stray_probs, 
-                                                   errors =  0,
-                                                   GWOF=follow,
-                                                   juv_rand= 100000,
-                                                   juv_stray_mat = juv_stray_probs)$ages[stage_forecast:n_stages,x])))[j]
+                                                  n_loc = n_loc, 
+                                                  n_stages = n_stages,
+                                                  harvest=rep(0,n_stocks),
+                                                  tons_at_age=tons_at_age,
+                                                  maturity= maturity,
+                                                  stage_maturity = stage_mat,
+                                                  surv_array = surv_array,              
+                                                  group_dd= group_dd,
+                                                  harvest_list=harvest_list,
+                                                  spat_alloc= spat_alloc,
+                                                  s_ID=stock_IDs,N_s=n_stocks,
+                                                  eggs = X[1, , i - 1], 
+                                                  X0 = X[2:n_stages, , i],
+                                                  stray_mat = stray_probs, 
+                                                  errors =  0,
+                                                  GWOF=follow,
+                                                  juv_rand= 100000,
+                                                  juv_stray_mat = juv_stray_probs)$ages[stage_forecast:n_stages,x])))[j]
           B0_est[i] <- B0
         }
       }
@@ -543,12 +540,6 @@ fishery_simulate <- function(n_loc,
       H[i+1,] <- ifelse(h_crit*B0_est[i]<((1-Fmort)*BF[,i+1,i,2]),
                         Fmort*BF[,i+1,i,2],
                         BF[,i+1,i,2]-h_crit*B0_est[i])*to_fish
-      if(quota_adj==1){
-        red[i] <- sapply(harvest_list,function(x) sum(B[x,i,2]))/sapply(stocklet_list,function(x) sum(B[x,i,2]))
-        H[i+1,] <- H[i+1,]*red[i]
-      } else {
-        red[i] <- 1
-      }
     } else {
       if(i==warmup){
         if(assessment== TRUE){
@@ -557,17 +548,26 @@ fishery_simulate <- function(n_loc,
       } 
       H[i+1,] <- rep(0,n_stocks) 
     }
-    SBI[i] <- ifelse(H[i]>0,
-                     ### if fishery is open and biomass is enough in local area
-                     ifelse(B[n_loc, i,1]>0.4*B0/n_loc,1,
-                            ### if fishery is open and biomass is enough in neighboring area
-                            ifelse((B[n_loc-1, i,1]>0.4*B0/n_loc)|(B[1, i,1]>0.4*B0/n_loc),4,5)),
-                     ### if fishery is closed and local biomass is crashed
-                     ifelse(B[n_loc, i,1]<0.2*B0/n_loc,
-                            ### if fishery is closed and local and far biomass is crashed
-                            ifelse((B[n_loc-1, i,1]<0.2*B0/n_loc)&(B[1, i,1]<0.2*B0/n_loc),7,6),
-                            ### if fishery is closed, local crash but far biomass is low
-                            2))
+      SBI[i] <- ifelse(mean(is.na(harvest_IDs))==0,
+                  ifelse(H[i]>0,
+                  ### if fishery is open and biomass is enough in local area
+                    ifelse(B[n_loc, i,1]>0.4*B[n_loc, 1,1],1,
+                  ### if fishery is open and biomass is enough in neighboring area
+                      ifelse((B[n_loc-1, i,1]>0.4*B[n_loc-1, 1,1])|(B[1, i,1]>0.4*B[1, 1,1]),4,5)),
+                  ### if fishery is closed and local biomass is crashed
+                    ifelse(B[n_loc, i,1]<0.2*B[n_loc, 1,1],
+                  ### if fishery is closed and local and far biomass is crashed
+                      ifelse((B[n_loc-1, i,1]<0.2*B[n_loc-1, 1,1])&(B[1, i,1]<0.2*B[1, 1,1]),7,6),
+                  ### if fishery is closed, local crash but far biomass is low
+                      2)),
+                  ### if fishery is open and there is an MPA
+                  ifelse(H[i]>0,8,
+                  ### if fishery is closed and biomass is low
+                    ifelse(B_s[1,i,1]>0.2*B_s[1,1,1],9,
+                  ### if fishery is closed and biomass is crashed
+                           10)
+                    )
+                  )
   }  
   
   ### generate summaries from the simulation 
@@ -599,8 +599,8 @@ fishery_simulate <- function(n_loc,
     g_b0 =ifelse(n_stocks>1,sum(B0),NA),
     
     ### overfishing metrics
-    pv_of =mean(B[n_loc,warmup2:n_iter,1]<=of_crit*B0/n_loc),
-    po_of =mean(apply(B[1:(n_loc-1),warmup2:n_iter,1],2,function(x) x<=of_crit*B0/n_loc)),
+    pv_of =mean(B[n_loc,warmup2:n_iter,1]<=of_crit*B0_loc[n_loc]),
+    po_of =mean(apply(B[1:(n_loc-1),warmup2:n_iter,1],2,function(x) x<=of_crit*B0_loc[1:(n_loc-1)])),
     s_of =mean(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),2,function(x) x<=of_crit*B0)),
     g_of =ifelse(n_stocks>1,
                  mean(!(colMeans(apply(matrix(B_s[,warmup2:n_iter,1],nrow= n_stocks),2,function(x) x<=of_crit*B0))<1)),
@@ -620,7 +620,7 @@ fishery_simulate <- function(n_loc,
     g_mu_catch = ifelse(n_stocks>1,g_mu_catch,NA),
     s_mu_catch = s_mu_catch,
     s_mu_egg_catch = s_mu_catch,
-    s_mu_red = mean(red,na.rm=T),
+    
     ### average annual variation in catch 
     g_aav =ifelse(n_stocks>1,mean(abs(diff(rowSums(H_loc[warmup2:n_iter,])))/rowSums(H_loc[warmup2:n_iter-1,]),na.rm= T)/g_mu_catch,NA),
     s_aav =mean(apply(matrix(stock_catch[warmup2:n_iter,]),2,function(x) abs(diff(x))))/(s_mu_catch),
@@ -664,7 +664,7 @@ fishery_simulate <- function(n_loc,
   ages_quants <- apply(apply(ages_dep,c(2,3),quantile,probs),c(1,2),mean)
   ages_quants <- data.frame(rbind(ages_quants,mean=rowMeans(apply(ages_dep,c(2,3),mean))))
   ages_quants$quant <- row.names(ages_quants)
-  
+
   ### estimate Age  for each stock and stocklet
   
   r_sigma <- sd(log(apply(X[2,,warmup2:n_iter],2,sum)))
@@ -672,7 +672,7 @@ fishery_simulate <- function(n_loc,
   quantile_df$quants <- row.names(quantile_df)
   if(ret_ts == TRUE){
     TS <- list(B=B,assess= BF,B_stocks= B_s,ages= X,mat=tons_at_age*mat,s_ages = S_freq_s,h_ages =S_freq_f,
-               B0=B0,B0_est= B0_est, Harvest= H, forecast= BF, Loc_Harvest = H_loc, SBI=SBI[warmup2:n_iter],red= red,
+               B0=B0,B0_est= B0_est, Harvest= H, forecast= BF, Loc_Harvest = H_loc, SBI=SBI[warmup2:n_iter],
                sampling= list(catches= catches,catch_comp=catch_comp,age_comp=age_comp,index= index,index.true=index.true))
   } else {
     TS <- NULL

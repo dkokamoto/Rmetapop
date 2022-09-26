@@ -1,3 +1,4 @@
+#' Discrete survival, straying, and recruitment projection.
 #' @param stray_mat a square L x L stray matrix. 
 #' @param surv_array an array of S-1 x S-1 survival matrices of length L (i.e. an array of off diagonal matrices) OR a single S-1 x S-1 survival matrix if constant in space OR a single survival value if constant in space and across ages.
 #' @param fec_at_age a vector or matrix of fecundity at age including only mature stages.
@@ -76,12 +77,12 @@ ssr_linear <- function(stray_mat,
   ### apply migration  
   ### recruits (age 2) move in proportion to biomass of older fish
   if (GWOF==TRUE){
-    X1[(stage_maturity+1):n_stages, ] <- X1[(stage_maturity+1):n_stages,] %*% t(stray_mat)
+    X1[(stage_maturity+1):n_stages, ] <- X1[(stage_maturity+1):n_stages, ] %*% t(stray_mat)
     biom <- colSums(apply(X1[(stage_maturity+1):n_stages, ],2,function(x)x*((tons_at_age*maturity)[-1])))
-    juv_stray_probs <- ran_stray_prob(stray_mat=apply(biom/sum(biom)*juv_stray_mat,2,function(x)x/sum(x)),n_iter=1,scale= juv_rand)[,,1]
-    X1[2,] <- X1[2,]%*%t(juv_stray_probs)
-  } else{
-    X1[2:n_stages, ] <- X1[2:n_stages,] %*% t(stray_mat)
+    X1[2,] <- X1[2,]%*%t(apply(biom/sum(biom)*juv_rand*juv_stray_mat,2,function(x) rdirichlet(1,x)))
+  }
+  else{
+    X1[2:n_stages, ] <- X1[2:n_stages, ] %*% t(stray_mat)
   }
   
   #### apply harvest rate
@@ -164,7 +165,7 @@ ssr_linear <- function(stray_mat,
                        function(x) x/colSums(h_biomass)))*
     (rep(1,length(stage_mat:n_stages))%*%t(loc_harvest))
   
-  Frate <- pmin(pmax(harvested/h_biomass,0,na.rm=T),0.99)
+  Frate <- mapply(min,harvested/h_biomass,0.99)
   
   biom_harvested <-h_biomass*Frate
   

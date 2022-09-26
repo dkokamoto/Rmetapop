@@ -35,16 +35,20 @@ spat_temp_ts <- function(n_iter, n_loc, site_sd, spat_sd, phi, cor_mat = NULL, l
   ### create the spatial covariance matrix from the correlation matrix ###
   # vcov_mat <- diag(rep(site_sd2, n_loc)) %*% cor_mat %*% diag(rep(site_sd2, n_loc))
   vcov_mat <- cor_mat
+  
+  times <- 1:n_iter
+  mat <- as.matrix(dist(times, diag = T, upper= T))
+  AR_mat <- as.matrix(site_sd^2*phi^mat)
+  
+  ### create the cholesky decomps 
+  L_temp <- t(chol(AR_mat))
+  L_spat <- t(chol(vcov_mat))
+  
   ### create the empty time series
-  d <- ts(matrix(0, ncol = n_loc, nrow = n_iter))
+  d <- ts(matrix(rnorm(n_loc*n_iter), ncol = n_loc, nrow = n_iter))
   
-  ### create the spatially correlated ts of errors
-  e <- ts(mvrnorm(n_iter,d[1,],Sigma= vcov_mat))
-  ### use the error vector to populate the ts
-  for (i in 2:n_iter) {
-    d[i, ] <- (phi * d[i - 1, ] + e[i, ]*site_sd2)
-  }
-  
+  d <- L_temp %*% t(L_spat %*% t(d))
+
   ### return spatial correlations and pacf are approximately correct
   fin_pacf_vec <- apply(d, 2, function(x) pacf(x, plot = FALSE, na.action= na.pass)$acf)[1, ]
   fin_cor_mat <- cor(d)
