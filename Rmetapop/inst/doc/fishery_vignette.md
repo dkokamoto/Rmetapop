@@ -52,12 +52,29 @@ pre.plot {
 
 
 
+```r
+# load key packages
+library(Rmetapop)
+source("../../R/ancillary.R")
+source("../../R/survival_straying_recruitment.R")
+source("../../R/stochasticity.R")
+library(dplyr)
+library(R2admb)
+library(parallel)
+library(R.utils)
+library(MASS)
+library(VGAM)
+library(RColorBrewer)
+```
 
 
 # Helper functions
 
-There are a variety of helper functions.  Check out some of the helper files: 
-## spatial correlation
+There are a variety of helper functions in this code.  Check out some of the helper files: 
+
+## Spatial correlation
+
+The basic spatial covariance kernel (or correlation where spat_sd = 1) is a squared exponential or periodic. 
 
 ```r
 ?spat_cor_mat
@@ -120,6 +137,11 @@ example(spat_cor_mat)
 <img src="fishery_vignette_files/figure-html/unnamed-chunk-2-1.png" width="100%" style="display: block; margin: auto;" />
 ## spatiotemporal correlation
 
+The basic genesis of a spatiotemporal time series (matrix n time points long for s locations) uses cholesky decomposition (L) of the separable temporal AR(1) and a spatial periodic (circular) covariance functions and a random white noise matrix $\epsilon$:
+
+$L_t [L_s \epsilon']'$
+
+
 ```r
 ?spat_temp_ts
 example(spat_temp_ts)
@@ -156,6 +178,9 @@ example(spat_temp_ts)
 <img src="fishery_vignette_files/figure-html/unnamed-chunk-3-1.png" width="100%" style="display: block; margin: auto;" />
 
 ## stray matrix
+
+The migration matrix is a random Dirichlet draw from a mean probability and random scale
+
 
 ```r
 ?ran_stray_prob
@@ -235,6 +260,7 @@ n_loc = n_stocks*n_loc_stocks     ### total number of "stocklets"
 
 The maturity of ages 2 and 3 are 25% and 90% followed by 100% thereafter.  We can take beverton-holt parameters from the pacific herring stock assessment.  We also assume instantaneous natural mortality is 0.58. Assume desnity dependence in recruitment is determined locally, and fish do not follow other fish to spawn (e.g., like MacCall et al. 2018) but this could be done by setting follow to TRUE.  Assume no difference in productivity among locations. 
 
+
 ```r
 maturity = c(0.25,0.9,1,1,1,1,1,1,1)                # proportional maturity for ages 2 through plus group
 stage_mat <- 2                                 # stage at first maturity
@@ -260,7 +286,6 @@ M_assess <- c(0.58)                            # natural mortality (fixed)
 rec_sd  <- c(0.8)                              # log-scale sd in rec-devs
 C <- 1e10               ### dirichlet stochasticity in migration (high C is low stochasticity)
 obs_sd = c(0.4)       ### observation error
-h_crit= c(0.25)            ### lower biomass threshold for closure
 phi  <- c(0.6)          ### recruitment autocorrelation
 surv_rho  <-1e-6   ### survival stochasticity (low rho is low stochasticity)
 ```
@@ -376,10 +401,11 @@ synchrony(n_loc,rec_corr_sd)
 
 ```r
 ### range of fishery parameters for the simulation
-Fmort <- c(0,0.1,0.2,0.25,0.375)
-spat_alloc <- c(1)
-stage_forecast= c(2)
-assessment= TRUE
+Fmort <- c(0,0.1,0.2,0.25,0.375) # fishing harvest rate (proportional)
+h_crit= c(0.25)                  # lower biomass threshold for closure
+spat_alloc <- c(1)               # spatial allocation options (1 mortality rate is equal across open locations)
+stage_forecast= c(2)             # first stage included in the forecast
+assessment= TRUE                 # whether or not to use a formal assessment
 ```
 
 ## combine parameters 
